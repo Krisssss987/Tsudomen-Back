@@ -345,12 +345,12 @@ async function resetPassword(req, res) {
 
 
 module.exports = {
-    register,
-    verifyToken,
-    loginUser,
-    getUserDetails,
-    resendToken,
-    resendResetToken,
-    forgotPassword,
-    resetPassword
+  register,
+  verifyToken,
+  loginUser,
+  getUserDetails,
+  resendToken,
+  resendResetToken,
+  forgotPassword,
+  resetPassword
 };
