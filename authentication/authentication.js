@@ -152,20 +152,60 @@ async function loginUser(req, res) {
       return res.status(402).json({ message: 'Invalid credentials' });
     }
 
-    const jwToken = jwtUtils.generateToken({ userName: Username });
-    res.status(200).json({ message: 'Login successful', token: jwToken });
+    const jwtToken = jwtUtils.generateToken({ userName: Username });
+    res.status(200).json({ message: 'Login successful', token: jwtToken });
 
   } catch (error) {
     console.error('Error during login:', error);
     res.status(500).json({ message: 'Internal server error', error });
   }
 }
-  
+
+async function getUserDetails(req, res) {
+  try {
+    if (!req.headers.authorization) {
+      console.log('Authorization header missing');
+      return res.status(401).json({ message: 'Authorization header missing' });
+    }
+
+    const token = req.headers.authorization.split(' ')[1];
+
+    const decodedToken = jwtUtils.verifyToken(token);
+    if (!decodedToken) {
+      console.log('Invalid Token');
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
+    const fetchUserQuery = 'SELECT * FROM ems_schema.ems_user_info WHERE "personal_email" = $1';
+    const fetchCompanyQuery = `SELECT * FROM oee.oee_company_info WHERE "company_id" = $1`;
+
+    const userResult = await db.query(fetchUserQuery, [decodedToken.userName]);
+
+    if (userResult.rowCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const userDetail = userResult.rows[0];
+
+    const companyResult = await db.query(fetchCompanyQuery, [userDetail.companyId]);
+
+    const companyDetails = companyResult.rows[0];
+
+    return res.status(200).json({
+      getUserDetails: userDetail,
+      companyDetails: companyDetails,
+    });
+  } catch (error) {
+    console.error('Error during fetching details:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+}  
 
 module.exports = {
     register,
     sendTokenEmail,
     verifyToken,
-    loginUser
+    loginUser,
+    getUserDetails
 
 };
