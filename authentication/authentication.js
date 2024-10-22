@@ -2,10 +2,43 @@ const bcrypt = require('bcrypt');
 const db = require('../db');
 const jwtUtils = require('../token/jwtUtils');
 const nodemailer = require('nodemailer');
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
 const ejs = require('ejs');
 const { v4: uuidv4 } = require('uuid');
+
+
+async function sendTokenEmail(email, token) {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: 'kpohekar19@gmail.com',
+        pass: 'woptjevenzhqmrpp'
+      },
+    });
+
+    const templatePath = path.join(__dirname, '../mail-body/email-template.ejs');
+    const templateData = await fs.readFile(templatePath, 'utf8');
+
+    const compiledTemplate = ejs.compile(templateData);
+    const html = compiledTemplate({ token });
+
+    const mailOptions = {
+      from: process.env.mailid,
+      to: email,
+      subject: 'Registration Token',
+      html: html,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+  } catch (error) {
+    console.error('Error sending email:', error);
+  }
+}
 
 async function register(req, res) {
     const {
@@ -23,6 +56,7 @@ async function register(req, res) {
     const user_id = uuidv4();
     const company_id = uuidv4();
     const password_hash = await bcrypt.hash(Password, 10);
+    const verificationToken = jwtUtils.generateToken({ personalemail: PersonalEmail });
 
     const client = await db.connect();
 
@@ -45,14 +79,17 @@ async function register(req, res) {
 
         const InsertUserQuery = `
             INSERT INTO oee.oee_user_info 
-            (user_id, first_name, last_name, personal_email, designation, company_id, password, verified, block) 
-            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9);
+            (user_id, first_name, last_name, personal_email, designation, company_id, password, verified, block, verification_token) 
+            VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
         `;
         await client.query(InsertUserQuery, [
-            user_id, FirstName, LastName, PersonalEmail, Designation, company_id, password_hash, null, null
+            user_id, FirstName, LastName, PersonalEmail, Designation, company_id, password_hash, 0, 0, verificationToken
         ]);
 
         await client.query('COMMIT');
+
+        sendTokenEmail(PersonalEmail, verificationToken);
+
         res.status(201).json({ message: 'User registered successfully' });
 
     } catch (error) {
@@ -65,6 +102,70 @@ async function register(req, res) {
     }
 }
 
+async function verifyToken(req, res) {
+    const { token } = req.body;
+  
+    const tokenCheckQuery = 'SELECT * FROM oee.oee_user_info WHERE verification_token = $1';
+  
+    try {
+      const tokenCheckResult = await db.query(tokenCheckQuery, [token]);
+  
+      if (tokenCheckResult.rows.length === 0) {
+        console.log('Token verification failed');
+        return res.status(400).json({ message: 'Token verification failed' });
+      }
+  
+      const updateQuery = 'UPDATE oee.oee_user_info SET verified = $1 WHERE verification_token = $2';
+      await db.query(updateQuery, [1, token]);
+  
+      console.log('Token verification successful');
+      res.json({ message: 'Token verification successful. You can now log in.' });
+    } catch (error) {
+      console.error('Error during token verification:', error);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+async function loginUser(req, res) {
+  const { Username, Password } = req.body;
+  const checkUserNameQuery = `SELECT * FROM oee.oee_user_info WHERE "personal_email" = $1`;
+
+  try {
+    const checkUserNameResult = await db.query(checkUserNameQuery, [Username]);
+
+    if (checkUserNameResult.rows.length === 0) {
+      return res.status(401).json({ message: 'Username not found' });
+    }
+
+    const user = checkUserNameResult.rows[0];
+
+    if (user.verified === 0) {
+      return res.status(401).json({ message: 'User is not verified. Please verify your account.' });
+    }
+
+    if (user.block === 1) {
+      return res.status(401).json({ message: 'User is blocked. Contact the Administrator.' });
+    }
+
+    const passwordCheckResult = await bcrypt.compare(Password, user.password);
+    if (!passwordCheckResult) {
+      return res.status(402).json({ message: 'Invalid credentials' });
+    }
+
+    const jwToken = jwtUtils.generateToken({ userName: Username });
+    res.status(200).json({ message: 'Login successful', token: jwToken });
+
+  } catch (error) {
+    console.error('Error during login:', error);
+    res.status(500).json({ message: 'Internal server error', error });
+  }
+}
+  
+
 module.exports = {
-    register
+    register,
+    sendTokenEmail,
+    verifyToken,
+    loginUser
+
 };
