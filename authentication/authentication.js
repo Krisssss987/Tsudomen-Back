@@ -175,7 +175,7 @@ async function getUserDetails(req, res) {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    const fetchUserQuery = 'SELECT * FROM ems_schema.ems_user_info WHERE "personal_email" = $1';
+    const fetchUserQuery = 'SELECT * FROM oee.oee_user_info WHERE "personal_email" = $1';
     const fetchCompanyQuery = `SELECT * FROM oee.oee_company_info WHERE "company_id" = $1`;
 
     const userResult = await db.query(fetchUserQuery, [decodedToken.userName]);
@@ -186,7 +186,7 @@ async function getUserDetails(req, res) {
 
     const userDetail = userResult.rows[0];
 
-    const companyResult = await db.query(fetchCompanyQuery, [userDetail.companyId]);
+    const companyResult = await db.query(fetchCompanyQuery, [userDetail.company_id]);
 
     const companyDetails = companyResult.rows[0];
 
