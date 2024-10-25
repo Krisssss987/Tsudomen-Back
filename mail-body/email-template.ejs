@@ -13,18 +13,13 @@
       height: 100vh;
     }
 
-    .sense-live-img {
-      height: 50px;
-      width: 50px;
-      margin-right: 10px;
-    }
-
     .h2 {
       line-height: 50px;
       font-size: 1.5rem;
       padding: 0;
       margin: 0;
       color: white;
+      text-align: center;
     }
 
     .sense-live-wrapper {
@@ -33,21 +28,23 @@
       align-items: center;
       
     }
+    img{
+      height: 80%;
+      width: 100%;
+      border-radius: 20px;
+    }
 
     .card {
       background: linear-gradient(45deg, #640918 0%, #141316 20%);
       color: white;
-      padding: 40px 20px;
+      padding: 40px 40px;
       border-radius: 10px;
       text-align: center;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-      width: 100%;
+      max-width: 600px;
       height:auto ;
-      max-width: 500px;
       box-sizing: border-box;
       margin: 20px;
-      display: flex;
-      flex-direction: column;
       justify-content: center;
     }
 
@@ -104,14 +101,12 @@
 <body>
   <div class="card">
     <div class="sense-live-wrapper">
-      <img src='./assets/favicon.ico' class="sense-live-img" alt="SenseLive">
-      <div class="h2">SenseLive</div>
+     <img src="https://media.licdn.com/dms/image/D5612AQHPQWU3siHfYA/article-cover_image-shrink_720_1280/0/1684784182727?e=2147483647&v=beta&t=yIGSsGmlDvMicc-OxXeofaHeM2A8jd4fcgHAWP-G2uc" alt="">
     </div>
     <h2 style="color: #c81a37;">Welcome to our Application !</h2>
-    <p>Your registration token is  <span class="token"><%= token %></span> <br>
-   Please click the button below to verify your email :</p>
-    <a href="https://localhost:4200/login/verify-user?token=<%= token %>">
-      <button>Verify Email</button>
+    <p>Please click the button below to verify your email :</p>
+    <a href="http://localhost:4200/#/authentication/verify-user?token=<%= token %>">
+    <button>Verify Email</button>
     </a>
   </div>
 </body>
