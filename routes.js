@@ -1,5 +1,6 @@
 const express = require('express');
 const auth = require('./authentication/authentication')
+const admin = require('./admin/admin')
 const router = express.Router();
 
 // authentication
@@ -11,5 +12,8 @@ router.post('/re-verify-mail', auth.resendToken);
 router.post('/forgot', auth.forgotPassword);
 router.post('/resend-forgot', auth.resendResetToken);
 router.post('/reset-password', auth.resetPassword);
+
+// admin
+router.get('/machine_data/:company_id', admin.machineByCompanyId);
 
 module.exports = router;
