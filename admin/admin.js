@@ -6,6 +6,19 @@ async function machineByCompanyId(req, res) {
     const { company_id, start_date, end_date } = req.params;
 
     const query = `
+        WITH month_data AS (
+            SELECT 
+                dd.deviceuid AS machine_id,
+                EXTRACT(YEAR FROM dd.timestamp) AS year,
+                EXTRACT(MONTH FROM dd.timestamp) AS month,
+                MAX((dd.data->>'This Month Production')::NUMERIC) AS max_prod,
+                MIN((dd.data->>'This Month Production')::NUMERIC) AS min_prod
+            FROM ems_schema.device_data dd
+            WHERE dd.timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD HH24:MI:SS')
+            AND dd.timestamp <= TO_TIMESTAMP($3, 'YYYY-MM-DD HH24:MI:SS')
+            GROUP BY dd.deviceuid, EXTRACT(YEAR FROM dd.timestamp), EXTRACT(MONTH FROM dd.timestamp)
+        )
+
         SELECT 
             m.machine_uid,
             m.machine_id,
@@ -18,6 +31,7 @@ async function machineByCompanyId(req, res) {
             m.machine_latitude,
             mt.machine_type_name,
             m.company_id,
+            
             COALESCE(
                 JSON_AGG(
                     JSON_BUILD_OBJECT(
@@ -31,14 +45,11 @@ async function machineByCompanyId(req, res) {
                 '[]'
             ) AS model_data,
             
-            -- Subquery to fetch the latest device data for the machine
             COALESCE(
                 (
                     SELECT 
                         CASE
-                            -- If no data is found in the last 15 minutes, return status 2 (N/A)
                             WHEN dd.deviceuid IS NULL THEN 2
-                            -- If data contains MC_STATUS
                             WHEN dd.data->>'MC_STATUS' IS NOT NULL THEN 
                                 CASE
                                     WHEN dd.data->>'MC_STATUS' = '0' THEN 0
@@ -47,17 +58,29 @@ async function machineByCompanyId(req, res) {
                                     WHEN dd.data->>'MC_STATUS' = '1' THEN 1
                                     ELSE 2
                                 END
-                            -- If MC_STATUS is not found, return status 2 (N/A)
                             ELSE 2
                         END AS status
                     FROM ems_schema.device_data dd
                     WHERE dd.deviceuid = m.machine_id
-                    AND dd.timestamp >= NOW() - INTERVAL '15 minutes' -- Data within the last 15 minutes
-                    ORDER BY dd.timestamp DESC -- Fetch the latest entry
+                    AND dd.timestamp >= NOW() - INTERVAL '15 minutes'
+                    ORDER BY dd.timestamp DESC
                     LIMIT 1
                 ), 
-                2 -- Default to status 2 if no data is available
-            ) AS status
+                2
+            ) AS status,
+
+            -- New produced_length column with monthly breakdown
+            COALESCE(
+                (
+                    SELECT SUM(max_prod - min_prod)
+                    FROM month_data md
+                    WHERE md.machine_id = m.machine_id
+                    AND md.year = EXTRACT(YEAR FROM CURRENT_DATE)
+                    AND md.month BETWEEN EXTRACT(MONTH FROM TO_TIMESTAMP($2, 'YYYY-MM-DD HH24:MI:SS')) 
+                                        AND EXTRACT(MONTH FROM TO_TIMESTAMP($3, 'YYYY-MM-DD HH24:MI:SS'))
+                ),
+                0
+            ) AS produced_length
 
         FROM oee.oee_machine m
         JOIN oee.oee_machine_type mt 
@@ -80,7 +103,7 @@ async function machineByCompanyId(req, res) {
     `;
 
     try {
-        const result = await db.query(query, [company_id]);
+        const result = await db.query(query, [company_id, start_date, end_date]);
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'No machines found for this company' });
         }
@@ -90,6 +113,7 @@ async function machineByCompanyId(req, res) {
         res.status(500).json({ error: 'Internal server error' });
     }
 }
+
 
 module.exports = {
     machineByCompanyId,

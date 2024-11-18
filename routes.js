@@ -14,6 +14,6 @@ router.post('/resend-forgot', auth.resendResetToken);
 router.post('/reset-password', auth.resetPassword);
 
 // admin
-router.get('/machine_data/:company_id', admin.machineByCompanyId);
+router.get('/machine_data/:company_id/:start_date/:end_date', admin.machineByCompanyId);
 
 module.exports = router;
