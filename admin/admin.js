@@ -69,7 +69,6 @@ async function machineByCompanyId(req, res) {
                 2
             ) AS status,
 
-            -- New produced_length column with monthly breakdown
             COALESCE(
                 (
                     SELECT SUM(max_prod - min_prod)
@@ -113,7 +112,6 @@ async function machineByCompanyId(req, res) {
         res.status(500).json({ error: 'Internal server error' });
     }
 }
-
 
 module.exports = {
     machineByCompanyId,
