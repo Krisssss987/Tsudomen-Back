@@ -113,7 +113,27 @@ async function machineByCompanyId(req, res) {
     }
 }
 
+async function getMachineName(req, res) {
+    const { machine_id } = req.params;
+
+    const query = `
+        Select * from oee.oee_machine where machine_uid = $1;
+    `;
+
+    try {
+        const result = await db.query(query, [machine_id]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'No machines found' });
+        }
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error fetching data:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
 module.exports = {
     machineByCompanyId,
-
+    getMachineName,
+    
 }
