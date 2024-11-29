@@ -17,4 +17,7 @@ router.post('/reset-password', auth.resetPassword);
 router.get('/machine_data/:company_id/:start_date/:end_date', admin.machineByCompanyId);
 router.get('/single_machine_data/:machine_id', admin.getMachineName);
 
+// oee
+router.get('/device_data/:device_id/:start_date/:end_date', admin.dataByDeviceId);
+
 module.exports = router;
