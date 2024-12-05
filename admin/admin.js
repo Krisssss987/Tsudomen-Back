@@ -91,7 +91,7 @@ async function machineByCompanyId(req, res) {
 
             COALESCE(
                 (
-                    SELECT SUM(max_prod - min_prod)
+                    SELECT ROUND(SUM(max_prod - min_prod), 0)
                     FROM month_data md
                     WHERE md.machine_id = m.machine_id
                     AND md.year = EXTRACT(YEAR FROM CURRENT_DATE)
