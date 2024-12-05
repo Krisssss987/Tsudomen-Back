@@ -13,10 +13,30 @@ async function machineByCompanyId(req, res) {
                 EXTRACT(MONTH FROM dd.timestamp) AS month,
                 MAX((dd.data->>'This Month Production')::NUMERIC) AS max_prod,
                 MIN((dd.data->>'This Month Production')::NUMERIC) AS min_prod
-            FROM ems_schema.device_data dd
+            FROM oee.device_data dd
             WHERE dd.timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD HH24:MI:SS')
             AND dd.timestamp <= TO_TIMESTAMP($3, 'YYYY-MM-DD HH24:MI:SS')
             GROUP BY dd.deviceuid, EXTRACT(YEAR FROM dd.timestamp), EXTRACT(MONTH FROM dd.timestamp)
+        ),
+        
+        reel_transitions AS (
+            SELECT 
+                dd.deviceuid AS machine_id,
+                COUNT(*) AS produced_reels
+            FROM oee.device_data dd
+            JOIN (
+                SELECT 
+                    deviceuid,
+                    LAG(dd.data->>'P_DT_BOBIN_FORMER_CHANGE') OVER (PARTITION BY dd.deviceuid ORDER BY dd.timestamp) AS prev_value,
+                    dd.data->>'P_DT_BOBIN_FORMER_CHANGE' AS current_value
+                FROM oee.device_data dd
+                WHERE dd.timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD HH24:MI:SS')
+                AND dd.timestamp <= TO_TIMESTAMP($3, 'YYYY-MM-DD HH24:MI:SS')
+                AND dd.data->>'P_DT_BOBIN_FORMER_CHANGE' IS NOT NULL
+            ) AS transitions
+            ON dd.deviceuid = transitions.deviceuid
+            WHERE transitions.prev_value = '0' AND transitions.current_value = '1'
+            GROUP BY dd.deviceuid
         )
 
         SELECT 
@@ -60,7 +80,7 @@ async function machineByCompanyId(req, res) {
                                 END
                             ELSE 2
                         END AS status
-                    FROM ems_schema.device_data dd
+                    FROM oee.device_data dd
                     WHERE dd.deviceuid = m.machine_id
                     AND dd.timestamp >= NOW() - INTERVAL '15 minutes'
                     ORDER BY dd.timestamp DESC
@@ -79,13 +99,17 @@ async function machineByCompanyId(req, res) {
                                         AND EXTRACT(MONTH FROM TO_TIMESTAMP($3, 'YYYY-MM-DD HH24:MI:SS'))
                 ),
                 0
-            ) AS produced_length
+            ) AS produced_length,
+
+            COALESCE(rt.produced_reels, 0) AS produced_reels
 
         FROM oee.oee_machine m
         JOIN oee.oee_machine_type mt 
         ON m.machine_type_id = mt.machine_type_id
         LEFT JOIN oee.oee_machine_parts p 
         ON m.machine_uid = p.machine_id
+        LEFT JOIN reel_transitions rt
+        ON m.machine_id = rt.machine_id
         WHERE m.company_id = $1
         GROUP BY 
             m.machine_uid, 
@@ -98,7 +122,7 @@ async function machineByCompanyId(req, res) {
             m.machine_longitude, 
             m.machine_latitude, 
             mt.machine_type_name,
-            m.company_id;
+            m.company_id, rt.produced_reels;
     `;
 
     try {
@@ -143,7 +167,7 @@ async function dataByDeviceId(req, res) {
         SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 1 THEN 1 ELSE 0 END) AS uptime_points,
         SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 0 THEN 1 ELSE 0 END) AS downtime_points
       FROM
-        ems_schema.device_data
+        oee.device_data
       WHERE 
         deviceUid = $1
         AND data::jsonb ? 'MC_STATUS'
@@ -165,7 +189,7 @@ async function dataByDeviceId(req, res) {
         timestamp,
         LEAD(timestamp) OVER (ORDER BY timestamp) AS next_timestamp
       FROM 
-        ems_schema.device_data
+        oee.device_data
       WHERE 
         deviceUid = $1
         AND data::jsonb ? 'LINE_SPEED'
@@ -204,7 +228,7 @@ async function dataByDeviceId(req, res) {
         EXTRACT(EPOCH FROM MAX(timestamp) - MIN(timestamp)) / 60 AS time_diff_minutes,
         MAX((data->>'LINE_SPEED')::numeric) AS max_speed
       FROM
-        ems_schema.device_data
+        oee.device_data
       WHERE 
         deviceUid = $1
         AND data::jsonb ? 'MC_STATUS'
@@ -245,7 +269,7 @@ async function dataByDeviceId(req, res) {
       FROM 
         target_length tl,
         (SELECT DISTINCT (data->>'ACT_COLD_DIA')::numeric AS diameter
-         FROM ems_schema.device_data
+         FROM oee.device_data
          WHERE deviceUid = $1
          AND data::jsonb ? 'ACT_COLD_DIA'
          AND timestamp BETWEEN $2 AND $3) dia
