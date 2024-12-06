@@ -488,18 +488,61 @@ async function getHolidays(req, res) {
   }
 }
 
+async function updateHoliday(req, res) {
+  const { holiday_id } = req.params;
+  const { holiday_name, holiday_date, holiday_image, created_by } = req.body;
+
+  const checkQuery = `SELECT * FROM oee.oee_holidays WHERE holiday_id = $1`;
+  const updateQuery = `
+    UPDATE oee.oee_holidays 
+    SET holiday_name = $2, 
+        holiday_date = $3, 
+        holiday_image = $4, 
+        created_by = $5
+    WHERE holiday_id = $1 
+    RETURNING *;
+  `;
+
+  try {
+    const checkResult = await db.query(checkQuery, [holiday_id]);
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Holiday not found' });
+    }
+
+    const updateResult = await db.query(updateQuery, [
+      holiday_id,
+      holiday_name,
+      holiday_date,
+      holiday_image,
+      created_by,
+    ]);
+
+    res.status(200).json({
+      message: 'Holiday updated successfully',
+      updatedHoliday: updateResult.rows[0],
+    });
+  } catch (err) {
+    console.error('Error updating holiday:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+
+
+
 
 
 module.exports = {
-    machineByCompanyId,
-    getMachineName,
-    dataByDeviceId,
-    addShift,
-    getShifts,
-    deleteShift,
-    edit_shift,
-    addShift,
-    addHoliday,
-    getHolidays,
-    
+  machineByCompanyId,
+  getMachineName,
+  dataByDeviceId,
+  addShift,
+  getShifts,
+  deleteShift,
+  edit_shift,
+  addShift,
+  addHoliday,
+  getHolidays,
+  updateHoliday,
+
 }
