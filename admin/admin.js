@@ -500,9 +500,17 @@ async function getHolidays(req, res) {
 
 async function updateHoliday(req, res) {
   const { holiday_id } = req.params;
-  const { holiday_name, holiday_date, holiday_image, created_by } = req.body;
+  const { holiday_name, holiday_date, holiday_image, created_by, company_id } = req.body;
 
-  const checkQuery = `SELECT * FROM oee.oee_holidays WHERE holiday_id = $1`;
+  if (!holiday_id || !company_id) {
+    return res.status(400).json({ error: 'holiday_id and company_id are required' });
+  }
+
+  const checkQuery = `
+    SELECT * FROM oee.oee_holidays 
+    WHERE holiday_date = $1 AND company_id = $2 AND holiday_id != $3
+  `;
+
   const updateQuery = `
     UPDATE oee.oee_holidays 
     SET holiday_name = $2, 
@@ -514,9 +522,9 @@ async function updateHoliday(req, res) {
   `;
 
   try {
-    const checkResult = await db.query(checkQuery, [holiday_id]);
-    if (checkResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Holiday not found' });
+    const checkResult = await db.query(checkQuery, [holiday_date, company_id, holiday_id]);
+    if (checkResult.rows.length > 0) {
+      return res.status(400).json({ error: 'A holiday on this date already exists' });
     }
 
     const updateResult = await db.query(updateQuery, [
@@ -527,9 +535,13 @@ async function updateHoliday(req, res) {
       created_by,
     ]);
 
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Holiday not found' });
+    }
+
     res.status(200).json({
       message: 'Holiday updated successfully',
-      updatedHoliday: updateResult.rows[0].holiday_id,
+      updatedHoliday: updateResult.rows[0],
     });
   } catch (err) {
     console.error('Error updating holiday:', err);
@@ -569,6 +581,6 @@ module.exports = {
   addHoliday,
   getHolidays,
   updateHoliday,
-  deleteHoliday
+  deleteHoliday,
 
 }

@@ -26,4 +26,9 @@ router.delete('/delete_shift/:shift_id', admin.deleteShift);
 router.put('/edit_shift/:shift_id', admin.edit_shift);
 router.post('/add_shift', admin.addShift);
 
+router.get('/get_holidays/:company_id', admin.getHolidays);
+router.delete('/delete_holiday/:shift_id', admin.deleteHoliday);
+router.put('/edit_holiday/:shift_id', admin.updateHoliday);
+router.post('/add_holiday', admin.addHoliday);
+
 module.exports = router;
