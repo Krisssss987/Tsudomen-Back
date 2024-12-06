@@ -396,7 +396,7 @@ async function deleteShift(req, res) {
     }
     res.status(200).json({
       message: 'Shift deleted successfully',
-      deletedShift: result.rows[0]
+      deletedShift: result.rows[0].shift_id
     });
   } catch (err) {
     console.error('Error deleting shift:', err);
@@ -404,8 +404,42 @@ async function deleteShift(req, res) {
   }
 }
 
+function edit_shift(req, res) {
+  const shift_id = req.params.shift_id;
+  const { shift_name, start_time, end_time, shift_days, created_by } = req.body;
 
+  const checkShiftQuery = `SELECT * FROM oee.oee_shifts WHERE shift_id = $1`;
 
+  const editShiftQuery = `
+    UPDATE oee.oee_shifts 
+    SET shift_name = $2, 
+        start_time = $3, 
+        end_time = $4, 
+        shift_days = $5, 
+        created_by = $6
+    WHERE shift_id = $1`;
+
+  db.query(checkShiftQuery, [shift_id], (checkError, checkResult) => {
+    if (checkError) {
+      return res.status(500).json({ message: 'Error while checking shift', error: checkError });
+    }
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Shift Not Found' });
+    } else {
+      db.query(
+        editShiftQuery,
+        [shift_id, shift_name, start_time, end_time, shift_days, created_by],
+        (editError, editResult) => {
+          if (editError) {
+            return res.status(500).json({ message: 'Error updating shift', error: editError });
+          }
+          return res.status(200).json({ message: 'Shift updated successfully' });
+        }
+      );
+    }
+  });
+}
 
 module.exports = {
     machineByCompanyId,
@@ -413,5 +447,6 @@ module.exports = {
     dataByDeviceId,
     addShift,
     getShifts,
-    deleteShift
+    deleteShift,
+    edit_shift
 }
