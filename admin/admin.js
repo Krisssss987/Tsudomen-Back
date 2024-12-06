@@ -404,7 +404,7 @@ async function deleteShift(req, res) {
   }
 }
 
-function edit_shift(req, res) {
+async function edit_shift(req, res) {
   const shift_id = req.params.shift_id;
   const { shift_name, start_time, end_time, shift_days, created_by } = req.body;
 
@@ -541,7 +541,7 @@ async function updateHoliday(req, res) {
 
     res.status(200).json({
       message: 'Holiday updated successfully',
-      updatedHoliday: updateResult.rows[0],
+      updatedHoliday: updateResult.rows[0].holiday_id,
     });
   } catch (err) {
     console.error('Error updating holiday:', err);
