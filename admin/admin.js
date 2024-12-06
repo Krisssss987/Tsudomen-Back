@@ -448,7 +448,12 @@ async function addHoliday(req, res) {
     return res.status(400).json({ error: 'holiday_name, holiday_date, and company_id are required' });
   }
 
-  const query = `
+  const checkQuery = `
+    SELECT * FROM oee.oee_holidays 
+    WHERE holiday_date = $1 AND company_id = $2
+  `;
+
+  const insertQuery = `
     INSERT INTO oee.oee_holidays (
       holiday_name, 
       holiday_date, 
@@ -460,7 +465,12 @@ async function addHoliday(req, res) {
   `;
 
   try {
-    const result = await db.query(query, [holiday_name, holiday_date, holiday_image, created_by, company_id]);
+    const checkResult = await db.query(checkQuery, [holiday_date, company_id]);
+    if (checkResult.rows.length > 0) {
+      return res.status(400).json({ error: 'A holiday on this date already exists for the specified company' });
+    }
+
+    const result = await db.query(insertQuery, [holiday_name, holiday_date, holiday_image, created_by, company_id]);
     res.status(201).json({
       message: 'Holiday added successfully',
       holiday: result.rows[0].holiday_id,
