@@ -32,7 +32,6 @@ async function machineByCompanyId(req, res) {
                 FROM oee.device_data dd
                 WHERE dd.timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD HH24:MI:SS')
                 AND dd.timestamp <= TO_TIMESTAMP($3, 'YYYY-MM-DD HH24:MI:SS')
-                AND dd.data->>'P_DT_BOBIN_FORMER_CHANGE' IS NOT NULL
             ) AS transitions
             ON dd.deviceuid = transitions.deviceuid
             WHERE transitions.prev_value = '0' AND transitions.current_value = '1'
