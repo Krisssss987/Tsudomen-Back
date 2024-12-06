@@ -376,6 +376,34 @@ async function addShift(req, res) {
   }
 }
 
+async function deleteShift(req, res) {
+  const { shift_id } = req.params;
+
+  if (!shift_id) {
+    return res.status(400).json({ error: 'Shift ID is required' });
+  }
+
+  const query = `
+    DELETE FROM oee.oee_shifts 
+    WHERE shift_id = $1 
+    RETURNING *;
+  `;
+
+  try {
+    const result = await db.query(query, [shift_id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Shift not found' });
+    }
+    res.status(200).json({
+      message: 'Shift deleted successfully',
+      deletedShift: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Error deleting shift:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 
 
 
@@ -384,5 +412,6 @@ module.exports = {
     getMachineName,
     dataByDeviceId,
     addShift,
-    getShifts  
+    getShifts,
+    deleteShift
 }
