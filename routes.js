@@ -20,4 +20,7 @@ router.get('/single_machine_data/:machine_id', admin.getMachineName);
 // oee
 router.get('/device_data/:device_id/:start_date/:end_date', admin.dataByDeviceId);
 
+//planning calendar
+router.get('/get_shifts/:company_id', admin.getShifts);
+
 module.exports = router;

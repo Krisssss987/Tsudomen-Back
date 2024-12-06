@@ -23,7 +23,6 @@ async function getMachineName(req, res) {
 
 
 // homepage
-
 async function machineByCompanyId(req, res) {
   const { company_id, start_date, end_date } = req.params;
 
@@ -160,7 +159,6 @@ async function machineByCompanyId(req, res) {
 
 
 // oee trend
-
 async function dataByDeviceId(req, res) {
     const { device_id, start_date, end_date } = req.params;
 
@@ -313,11 +311,78 @@ async function dataByDeviceId(req, res) {
 
 
 // planning calendar
+async function getShifts(req, res) {
+  const { company_id } = req.params;
+
+  const query = `
+    SELECT 
+      shifts.shift_id, 
+      shifts.shift_name, 
+      shifts.start_time, 
+      shifts.end_time, 
+      shifts.shift_days, 
+      users.first_name, 
+      users.last_name
+    FROM 
+      oee.oee_shifts shifts
+    INNER JOIN 
+      oee.oee_user_info users
+    ON 
+      shifts.created_by = users.user_id
+    WHERE 
+      shifts.company_id = $1;
+  `;
+
+  try {
+    const result = await db.query(query, [company_id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No shifts found for the specified company' });
+    }
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('Error fetching shifts:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function addShift(req, res) {
+  const { shift_name, start_time, end_time, shift_days, created_by, company_id } = req.body;
+
+  if (!shift_name || !start_time || !end_time || !shift_days || !created_by || !company_id) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  const query = `
+    INSERT INTO oee.oee_shifts (
+      shift_name, 
+      start_time, 
+      end_time, 
+      shift_days, 
+      created_by, 
+      company_id
+    ) VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING *;
+  `;
+
+  try {
+    const result = await db.query(query, [shift_name, start_time, end_time, shift_days, created_by, company_id]);
+    res.status(201).json({
+      message: 'Shift added successfully',
+      shift_id: result.rows[0].shift_id
+    });
+  } catch (err) {
+    console.error('Error adding shift:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 
 
 
 module.exports = {
     machineByCompanyId,
     getMachineName,
-    dataByDeviceId    
+    dataByDeviceId,
+    addShift,
+    getShifts  
 }
