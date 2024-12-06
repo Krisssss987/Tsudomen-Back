@@ -441,6 +441,37 @@ function edit_shift(req, res) {
   });
 }
 
+async function addHoliday(req, res) {
+  const { holiday_name, holiday_date, holiday_image, created_by, company_id } = req.body;
+
+  if (!holiday_name || !holiday_date || !company_id) {
+    return res.status(400).json({ error: 'holiday_name, holiday_date, and company_id are required' });
+  }
+
+  const query = `
+    INSERT INTO oee.oee_holidays (
+      holiday_name, 
+      holiday_date, 
+      holiday_image, 
+      created_by, 
+      company_id
+    ) VALUES ($1, $2, $3, $4, $5)
+    RETURNING *;
+  `;
+
+  try {
+    const result = await db.query(query, [holiday_name, holiday_date, holiday_image, created_by, company_id]);
+    res.status(201).json({
+      message: 'Holiday added successfully',
+      holiday: result.rows[0],
+    });
+  } catch (err) {
+    console.error('Error adding holiday:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+
 module.exports = {
     machineByCompanyId,
     getMachineName,
@@ -448,5 +479,7 @@ module.exports = {
     addShift,
     getShifts,
     deleteShift,
-    edit_shift
+    edit_shift,
+    addShift,
+    addHoliday
 }
