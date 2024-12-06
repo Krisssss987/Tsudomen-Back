@@ -463,7 +463,7 @@ async function addHoliday(req, res) {
     const result = await db.query(query, [holiday_name, holiday_date, holiday_image, created_by, company_id]);
     res.status(201).json({
       message: 'Holiday added successfully',
-      holiday: result.rows[0],
+      holiday: result.rows[0].holiday_id,
     });
   } catch (err) {
     console.error('Error adding holiday:', err);
@@ -519,7 +519,7 @@ async function updateHoliday(req, res) {
 
     res.status(200).json({
       message: 'Holiday updated successfully',
-      updatedHoliday: updateResult.rows[0],
+      updatedHoliday: updateResult.rows[0].holiday_id,
     });
   } catch (err) {
     console.error('Error updating holiday:', err);
@@ -527,10 +527,25 @@ async function updateHoliday(req, res) {
   }
 }
 
+async function deleteHoliday(req, res) {
+  const { holiday_id } = req.params;
 
+  const query = `DELETE FROM oee.oee_holidays WHERE holiday_id = $1 RETURNING *`;
 
-
-
+  try {
+    const result = await db.query(query, [holiday_id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Holiday not found' });
+    }
+    res.status(200).json({
+      message: 'Holiday deleted successfully',
+      deletedHoliday: result.rows[0].holiday_id,
+    });
+  } catch (err) {
+    console.error('Error deleting holiday:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
 
 module.exports = {
   machineByCompanyId,
@@ -544,5 +559,6 @@ module.exports = {
   addHoliday,
   getHolidays,
   updateHoliday,
+  deleteHoliday
 
 }
