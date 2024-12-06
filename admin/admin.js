@@ -471,6 +471,24 @@ async function addHoliday(req, res) {
   }
 }
 
+async function getHolidays(req, res) {
+  const { company_id } = req.params;
+
+  const query = `SELECT * FROM oee.oee_holidays WHERE company_id = $1`;
+
+  try {
+    const result = await db.query(query, [company_id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No holidays found for this company' });
+    }
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('Error fetching holidays:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+
 
 module.exports = {
     machineByCompanyId,
@@ -481,5 +499,7 @@ module.exports = {
     deleteShift,
     edit_shift,
     addShift,
-    addHoliday
+    addHoliday,
+    getHolidays,
+    
 }
