@@ -22,7 +22,6 @@ async function getMachineName(req, res) {
     }
 }
 
-
 // homepage
 async function machineByCompanyId(req, res) {
   const { company_id, start_date, end_date } = req.params;
@@ -179,7 +178,6 @@ async function machineByCompanyId(req, res) {
   }
 }
 
-
 // oee trend
 async function dataByDeviceId(req, res) {
     const { device_id, start_date, end_date } = req.params;
@@ -330,7 +328,6 @@ async function dataByDeviceId(req, res) {
         res.status(500).json({ error: 'Internal server error' });
     }
 }
-
 
 // planning calendar
 async function getShifts(req, res) {
@@ -591,9 +588,7 @@ async function deleteHoliday(req, res) {
   }
 }
 
-
 // Technical Support
-
 async function makeRequest(req, res) {
   const { request_subject, division, product_family, machine_brand, type_of_request, created_by, machine_uid, description } = req.body;
 
