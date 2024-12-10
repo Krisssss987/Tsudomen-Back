@@ -640,6 +640,46 @@ async function makeRequest(req, res) {
   }
 }
 
+async function getUserWithCompanyData(req, res) {
+  const { user_id } = req.params;
+
+  const query = `
+    SELECT 
+      ui.user_id,
+      ui.first_name,
+      ui.last_name,
+      ui.personal_email,
+      ui.designation,
+      ui.company_id,
+      ui.verified,
+      ui.block,
+      ui.verification_token,
+      ci.company_name, 
+      ci.company_email,
+      ci.contact_no,
+      ci.location
+    FROM oee.oee_user_info ui
+    JOIN oee.oee_company_info ci 
+      ON ui.company_id = ci.company_id
+    WHERE ui.user_id = $1;
+  `;
+
+  try {
+    const result = await db.query(query, [user_id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found or no company associated with this user' });
+    }
+
+    // Send the user data along with company data
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching user and company data:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+
 
 
 module.exports = {
@@ -656,5 +696,6 @@ module.exports = {
   updateHoliday,
   deleteHoliday,
   makeRequest,
+  getUserWithCompanyData
 
 }

@@ -33,6 +33,7 @@ router.post('/add_holiday', admin.addHoliday);
 
 // Technical Support
 router.post('/make_request', admin.makeRequest);
+router.get('/get_user_details/:user_id', admin.getUserWithCompanyData);
 
 
 module.exports = router;
