@@ -1,6 +1,7 @@
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcrypt');
+const axios = require('axios');
 
 async function getMachineName(req, res) {
     const { machine_id } = req.params;
@@ -150,12 +151,33 @@ async function machineByCompanyId(req, res) {
       if (result.rows.length === 0) {
           return res.status(404).json({ error: 'No machines found for this company' });
       }
-      res.status(200).json(result.rows);
+
+      const apiBaseUrl = process.env.API_BASE_URL;
+
+      const machineDataWithOEE = await Promise.all(result.rows.map(async (machine) => {
+          try {
+              const oeeResponse = await axios.get(`${apiBaseUrl}/device_data/${machine.machine_id}/${start_date}/${end_date}`);
+              const oeeData = oeeResponse.data;
+
+              machine.oee = oeeData.OEE;
+              machine.availability = oeeData.Availability;
+              machine.performance = oeeData.Performance;
+              machine.quality = oeeData.Quality;
+
+              return machine;
+          } catch (error) {
+              console.error(`Error fetching OEE data for machine ${machine.machine_id}:`, error);
+              machine.oee = null;
+              return machine;
+          }
+      }));
+
+      res.status(200).json(machineDataWithOEE);
   } catch (err) {
       console.error('Error fetching data:', err);
       res.status(500).json({ error: 'Internal server error' });
   }
-} 
+}
 
 
 // oee trend
