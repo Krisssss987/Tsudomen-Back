@@ -591,6 +591,57 @@ async function deleteHoliday(req, res) {
   }
 }
 
+
+// Technical Support
+
+async function makeRequest(req, res) {
+  const { request_subject, division, product_family, machine_brand, type_of_request, created_by, machine_uid, description } = req.body;
+
+  if (!request_subject || !division || !product_family || !machine_brand || !type_of_request || !created_by || !machine_uid) {
+    return res.status(400).json({ error: 'All fields except description are required' });
+  }
+
+  const query = `
+    INSERT INTO oee.customer_support (
+      request_subject, 
+      division, 
+      product_family, 
+      machine_brand, 
+      type_of_request, 
+      description, 
+      created_by, 
+      machine_uid, 
+      request_status
+    ) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING *;
+  `;
+
+  try {
+    const result = await db.query(query, [
+      request_subject,
+      division,
+      product_family,
+      machine_brand,
+      type_of_request,
+      description || null,
+      created_by,
+      machine_uid,
+      0
+    ]);
+
+    res.status(201).json({
+      message: 'Request created successfully',
+      request_id: result.rows[0].request_id
+    });
+  } catch (err) {
+    console.error('Error creating request:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+
+
 module.exports = {
   machineByCompanyId,
   getMachineName,
@@ -604,5 +655,6 @@ module.exports = {
   getHolidays,
   updateHoliday,
   deleteHoliday,
+  makeRequest,
 
 }

@@ -31,4 +31,8 @@ router.delete('/delete_holiday/:shift_id', admin.deleteHoliday);
 router.put('/edit_holiday/:shift_id', admin.updateHoliday);
 router.post('/add_holiday', admin.addHoliday);
 
+// Technical Support
+router.post('/make_request', admin.makeRequest);
+
+
 module.exports = router;
