@@ -178,6 +178,70 @@ async function machineByCompanyId(req, res) {
   }
 }
 
+async function machineByCompanyIdFirst(req, res) {
+  const { company_id } = req.params;
+
+  const query = `
+      SELECT 
+          m.machine_uid,
+          m.machine_id,
+          m.machine_name,
+          m.machine_plant,
+          m.machine_model,
+          m.machine_customer,
+          m.machine_location,
+          m.machine_longitude,
+          m.machine_latitude,
+          mt.machine_type_name,
+          m.company_id,
+          
+          COALESCE(
+              JSON_AGG(
+                  JSON_BUILD_OBJECT(
+                      'machine_part_id', p.machine_part_id,
+                      'machine_part_name', p.machine_part_name,
+                      'machine_part_serial_no', p.machine_part_serial_no,
+                      'machine_image_path', p.machine_image_path,
+                      'machine_image_name', p.machine_image_name
+                  )
+              ) FILTER (WHERE p.machine_part_id IS NOT NULL),
+              '[]'
+          ) AS model_data
+
+      FROM oee.oee_machine m
+      JOIN oee.oee_machine_type mt 
+      ON m.machine_type_id = mt.machine_type_id
+      LEFT JOIN oee.oee_machine_parts p 
+      ON m.machine_uid = p.machine_id
+      WHERE m.company_id = $1
+      GROUP BY 
+          m.machine_uid, 
+          m.machine_id, 
+          m.machine_name, 
+          m.machine_plant, 
+          m.machine_model, 
+          m.machine_customer, 
+          m.machine_location, 
+          m.machine_longitude, 
+          m.machine_latitude, 
+          mt.machine_type_name,
+          m.company_id;
+  `;
+
+  try {
+      const result = await db.query(query, [company_id]);
+      if (result.rows.length === 0) {
+          return res.status(404).json({ error: 'No machines found for this company' });
+      }
+
+      res.status(200).json(result.rows);
+  } catch (err) {
+      console.error('Error fetching data:', err);
+      res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+
 // oee trend
 async function dataByDeviceId(req, res) {
     const { device_id, start_date, end_date } = req.params;
@@ -691,6 +755,7 @@ module.exports = {
   updateHoliday,
   deleteHoliday,
   makeRequest,
-  getUserWithCompanyData
+  getUserWithCompanyData,
+  machineByCompanyIdFirst
 
 }
