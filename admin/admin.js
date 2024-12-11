@@ -738,7 +738,103 @@ async function getUserWithCompanyData(req, res) {
   }
 }
 
+// Breakdowns
+async function getBreakdowns(req, res) {
+  const { machine_uid, start_time, end_time } = req.params;
 
+  const machineQuery = `
+      SELECT machine_id 
+      FROM oee.oee_machine 
+      WHERE machine_uid = $1;
+  `;
+
+  const alarmsQuery = `
+      SELECT alarm_code, alarm_description 
+      FROM oee.oee_alarms;
+  `;
+
+  const dataQuery = `
+      WITH alarm_data AS (
+          SELECT
+              dd."data" ->> alarm_code AS alarm_status,
+              dd."timestamp" AS timestamp,
+              alarm_code,
+              alarm_description
+          FROM oee.device_data dd
+          CROSS JOIN (
+              SELECT alarm_code, alarm_description
+              FROM oee.oee_alarms
+          ) alarms
+          WHERE dd.deviceuid = $1
+            AND dd."timestamp" BETWEEN $2 AND $3
+            AND (dd."data" ->> alarm_code)::integer IS NOT NULL
+      ),
+      alarm_transitions AS (
+          SELECT
+              alarm_code,
+              alarm_description,
+              timestamp,
+              LAG(alarm_status) OVER (PARTITION BY alarm_code ORDER BY timestamp) AS prev_status,
+              alarm_status,
+              LEAD(timestamp) OVER (PARTITION BY alarm_code ORDER BY timestamp) AS next_timestamp
+          FROM alarm_data
+      ),
+      alarm_durations AS (
+          SELECT
+              alarm_code,
+              alarm_description,
+              CASE WHEN prev_status = '0' AND alarm_status = '1' THEN 1 ELSE 0 END AS count_increment,
+              CASE WHEN alarm_status = '1' THEN EXTRACT(EPOCH FROM next_timestamp - timestamp) ELSE 0 END AS duration_increment
+          FROM alarm_transitions
+      ),
+      aggregated_alarms AS (
+          SELECT
+              alarm_code,
+              alarm_description,
+              SUM(count_increment) AS count,
+              SUM(duration_increment) AS duration
+          FROM alarm_durations
+          GROUP BY alarm_code, alarm_description
+          HAVING SUM(count_increment) > 0
+      ),
+      total_metrics AS (
+          SELECT
+              SUM(count) AS total_count,
+              SUM(duration) AS total_duration
+          FROM aggregated_alarms
+      )
+      SELECT
+          a.alarm_code,
+          a.alarm_description,
+          COALESCE(aa.count, 0) AS count,
+          COALESCE(aa.duration, 0) AS duration,
+          ROUND(COALESCE(aa.count, 0) * 100.0 / NULLIF(tm.total_count, 0), 2) AS cumulative_percent_count,
+          ROUND(COALESCE(aa.duration, 0) * 100.0 / NULLIF(tm.total_duration, 0), 2) AS cumulative_percent_duration
+      FROM oee.oee_alarms a
+      LEFT JOIN aggregated_alarms aa ON a.alarm_code = aa.alarm_code
+      CROSS JOIN total_metrics tm;
+  `;
+
+  try {
+      const machineResult = await db.query(machineQuery, [machine_uid]);
+      if (machineResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Machine not found' });
+      }
+
+      const machine_id = machineResult.rows[0].machine_id;
+
+      const alarmsResult = await db.query(alarmsQuery);
+      if (alarmsResult.rows.length === 0) {
+          return res.status(404).json({ error: 'No alarms configured' });
+      }
+
+      const deviceDataResult = await db.query(dataQuery, [machine_id, start_time, end_time]);
+      res.status(200).json(deviceDataResult.rows);
+  } catch (err) {
+      console.error('Error fetching breakdowns:', err);
+      res.status(500).json({ error: 'Internal server error' });
+  }
+}
 
 
 module.exports = {
@@ -756,6 +852,7 @@ module.exports = {
   deleteHoliday,
   makeRequest,
   getUserWithCompanyData,
-  machineByCompanyIdFirst
+  machineByCompanyIdFirst,
+  getBreakdowns
 
 }

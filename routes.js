@@ -36,5 +36,8 @@ router.post('/add_holiday', admin.addHoliday);
 router.post('/make_request', admin.makeRequest);
 router.get('/get_user_details/:user_id', admin.getUserWithCompanyData);
 
+// breakdowns
+router.get('/breakdowns/:machine_uid/:start_time/:end_time', admin.getBreakdowns);
+
 
 module.exports = router;
