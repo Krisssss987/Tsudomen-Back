@@ -23,11 +23,11 @@ router.get('/device_data/:device_id/:start_date/:end_date', admin.dataByDeviceId
 
 //planning calendar
 router.get('/get_shifts/:company_id', admin.getShifts);
+
 router.delete('/delete_shift/:shift_id', admin.deleteShift);
 router.put('/edit_shift/:shift_id', admin.edit_shift);
 router.post('/add_shift', admin.addShift);
 
-router.get('/get_holidays/:company_id', admin.getHolidays);
 router.delete('/delete_holiday/:shift_id', admin.deleteHoliday);
 router.put('/edit_holiday/:shift_id', admin.updateHoliday);
 router.post('/add_holiday', admin.addHoliday);

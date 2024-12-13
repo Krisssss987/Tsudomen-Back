@@ -397,7 +397,22 @@ async function dataByDeviceId(req, res) {
 async function getShifts(req, res) {
   const { company_id } = req.params;
 
-  const query = `
+  const holidayQuery = `
+    SELECT 
+      holiday_id, 
+      holiday_name, 
+      TO_CHAR(TO_TIMESTAMP(holiday_date, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ'), 'DD/MM/YYYY') AS holiday_date,
+      holiday_image, 
+      created_by, 
+      company_id
+    FROM 
+      oee.oee_holidays 
+    WHERE 
+      company_id = $1 
+      AND TO_TIMESTAMP(holiday_date, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') >= NOW()
+  `;
+
+  const shiftQuery = `
     SELECT 
       shifts.shift_id, 
       shifts.shift_name, 
@@ -413,17 +428,27 @@ async function getShifts(req, res) {
     ON 
       shifts.created_by = users.user_id
     WHERE 
-      shifts.company_id = $1;
+      shifts.company_id = $1
   `;
 
   try {
-    const result = await db.query(query, [company_id]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No shifts found for the specified company' });
+    const [holidayResult, shiftResult] = await Promise.all([
+      db.query(holidayQuery, [company_id]),
+      db.query(shiftQuery, [company_id]),
+    ]);
+
+    const responseData = {
+      holidays: holidayResult.rows,
+      shifts: shiftResult.rows,
+    };
+
+    if (responseData.holidays.length === 0 && responseData.shifts.length === 0) {
+      return res.status(404).json({ error: 'No data found for the specified company' });
     }
-    res.status(200).json(result.rows);
+
+    res.status(200).json(responseData);
   } catch (err) {
-    console.error('Error fetching shifts:', err);
+    console.error('Error fetching company data:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -560,28 +585,6 @@ async function addHoliday(req, res) {
     });
   } catch (err) {
     console.error('Error adding holiday:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-}
-
-async function getHolidays(req, res) {
-  const { company_id } = req.params;
-
-  const query = `
-    SELECT * 
-    FROM oee.oee_holidays 
-    WHERE company_id = $1 
-      AND TO_TIMESTAMP(holiday_date, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') >= NOW()
-  `;
-
-  try {
-    const result = await db.query(query, [company_id]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No holidays found for this company' });
-    }
-    res.status(200).json(result.rows);
-  } catch (err) {
-    console.error('Error fetching holidays:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -842,7 +845,6 @@ async function getBreakdowns(req, res) {
   }
 }
 
-
 module.exports = {
   machineByCompanyId,
   getMachineName,
@@ -853,12 +855,10 @@ module.exports = {
   edit_shift,
   addShift,
   addHoliday,
-  getHolidays,
   updateHoliday,
   deleteHoliday,
   makeRequest,
   getUserWithCompanyData,
   machineByCompanyIdFirst,
   getBreakdowns
-
 }
