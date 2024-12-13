@@ -14,27 +14,27 @@ router.post('/resend-forgot', auth.resendResetToken);
 router.post('/reset-password', auth.resetPassword);
 
 // admin
-router.get('/machine_data/:company_id/:start_date/:end_date', admin.machineByCompanyId);
-router.get('/machine_data_first/:company_id', admin.machineByCompanyIdFirst);
-router.get('/single_machine_data/:machine_id', admin.getMachineName);
+router.get('/machine_data/:company_id/:start_date/:end_date', admin.machineByCompanyId); //done
+router.get('/machine_data_first/:company_id', admin.machineByCompanyIdFirst); //done
+router.get('/single_machine_data/:machine_id', admin.getMachineName); //done
 
 // oee
 router.get('/device_data/:device_id/:start_date/:end_date', admin.dataByDeviceId);
 
 //planning calendar
-router.get('/get_shifts/:company_id', admin.getShifts);
+router.get('/get_shifts/:company_id', admin.getShifts); //done
 
 router.delete('/delete_shift/:shift_id', admin.deleteShift);
 router.put('/edit_shift/:shift_id', admin.edit_shift);
-router.post('/add_shift', admin.addShift);
+router.post('/add_shift', admin.addShift); //done
 
 router.delete('/delete_holiday/:shift_id', admin.deleteHoliday);
 router.put('/edit_holiday/:shift_id', admin.updateHoliday);
-router.post('/add_holiday', admin.addHoliday);
+router.post('/add_holiday', admin.addHoliday); //done
 
 // Technical Support
-router.post('/make_request', admin.makeRequest);
-router.get('/get_user_details/:user_id', admin.getUserWithCompanyData);
+router.post('/make_request', admin.makeRequest); //done
+router.get('/get_user_details/:user_id', admin.getUserWithCompanyData); //done
 
 // breakdowns
 router.get('/breakdowns/:machine_uid/:start_time/:end_time', admin.getBreakdowns);
