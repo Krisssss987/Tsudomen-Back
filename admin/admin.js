@@ -567,7 +567,12 @@ async function addHoliday(req, res) {
 async function getHolidays(req, res) {
   const { company_id } = req.params;
 
-  const query = `SELECT * FROM oee.oee_holidays WHERE company_id = $1`;
+  const query = `
+    SELECT * 
+    FROM oee.oee_holidays 
+    WHERE company_id = $1 
+      AND TO_TIMESTAMP(holiday_date, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') >= NOW()
+  `;
 
   try {
     const result = await db.query(query, [company_id]);
@@ -699,6 +704,7 @@ async function makeRequest(req, res) {
   }
 }
 
+// profile
 async function getUserWithCompanyData(req, res) {
   const { user_id } = req.params;
 
