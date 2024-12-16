@@ -408,8 +408,9 @@ async function getShifts(req, res) {
     FROM 
       oee.oee_holidays 
     WHERE 
-      company_id = $1 
-      AND TO_TIMESTAMP(holiday_date, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ') >= NOW()
+      company_id = $1
+    ORDER BY 
+      TO_DATE(TO_CHAR(TO_TIMESTAMP(holiday_date, 'YYYY-MM-DD"T"HH24:MI:SS.MSZ'), 'DD/MM/YYYY'), 'DD/MM/YYYY') ASC
   `;
 
   const shiftQuery = `
