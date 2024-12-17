@@ -1,6 +1,4 @@
 const db = require('../db');
-const { v4: uuidv4 } = require('uuid');
-const bcrypt = require('bcrypt');
 const axios = require('axios');
 
 async function getMachineName(req, res) {
