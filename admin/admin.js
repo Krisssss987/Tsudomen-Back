@@ -840,6 +840,79 @@ async function getBreakdowns(req, res) {
   }
 }
 
+async function getMachineMetrics(req, res) {
+  const { machine_uid, start_time, end_time } = req.params;
+
+  const machineQuery = `
+      SELECT machine_id
+      FROM oee.oee_machine
+      WHERE machine_uid = $1;
+  `;
+
+  const metricsQuery = `
+      WITH alarm_data AS (
+          SELECT
+              dd."timestamp" AS alarm_timestamp,
+              dd."data" ->> 'MC_STATUS' AS mc_status,
+              dd."data" ->> alarm_code AS alarm_status,
+              alarm_code,
+              LAG(dd."data" ->> alarm_code) OVER (PARTITION BY alarm_code ORDER BY dd."timestamp") AS prev_alarm_status,
+              LAG(dd."timestamp") OVER (PARTITION BY alarm_code ORDER BY dd."timestamp") AS prev_timestamp,
+              LEAD(dd."timestamp") OVER (PARTITION BY alarm_code ORDER BY dd."timestamp") AS next_timestamp
+          FROM oee.device_data dd
+          CROSS JOIN (
+              SELECT alarm_code
+              FROM oee.oee_alarms
+          ) alarms
+          WHERE dd.deviceuid = $1
+            AND dd."timestamp" BETWEEN $2 AND $3
+      ),
+      alarm_metrics AS (
+          SELECT
+              SUM(
+                  CASE WHEN alarm_status = '1' THEN 
+                      EXTRACT(EPOCH FROM next_timestamp - alarm_timestamp)
+                  ELSE 0 END
+              ) AS total_active_time,
+              SUM(
+                  CASE WHEN mc_status = '1' AND alarm_status IS NULL THEN 
+                      EXTRACT(EPOCH FROM next_timestamp - alarm_timestamp)
+                  ELSE 0 END
+              ) AS total_uptime,
+              COUNT(*) FILTER (
+                  WHERE prev_alarm_status = '0' AND alarm_status = '1'
+              ) AS total_alarm_count
+          FROM alarm_data
+      ),
+      time_frame AS (
+          SELECT EXTRACT(DAY FROM ($3::timestamp - $2::timestamp)) + 1 AS total_days
+      )
+      SELECT
+          ROUND(total_alarm_count::numeric / tf.total_days, 2) AS mean_alarm_count_per_day,
+          ROUND(total_active_time::numeric / tf.total_days, 2) AS mean_alarm_duration_per_day,
+          ROUND(total_uptime::numeric / NULLIF(total_alarm_count, 0), 2) AS mean_time_between_alarms,
+          ROUND(total_active_time::numeric / NULLIF(total_alarm_count, 0), 2) AS mean_time_to_restart_on_alarm
+      FROM alarm_metrics, time_frame tf;
+  `;
+
+  try {
+      const machineResult = await db.query(machineQuery, [machine_uid]);
+
+      if (machineResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Machine not found' });
+      }
+
+      const machine_id = machineResult.rows[0].machine_id;
+
+      const metricsResult = await db.query(metricsQuery, [machine_id, start_time, end_time]);
+
+      res.status(200).json(metricsResult.rows[0]);
+  } catch (err) {
+      console.error('Error fetching machine metrics:', err);
+      res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 module.exports = {
   machineByCompanyId,
   getMachineName,
@@ -855,5 +928,6 @@ module.exports = {
   makeRequest,
   getUserWithCompanyData,
   machineByCompanyIdFirst,
-  getBreakdowns
+  getBreakdowns,
+  getMachineMetrics
 }

@@ -38,6 +38,7 @@ router.get('/get_user_details/:user_id', admin.getUserWithCompanyData); //done
 
 // breakdowns
 router.get('/breakdowns/:machine_uid/:start_time/:end_time', admin.getBreakdowns);
+router.get('/alarms/:machine_uid/:start_time/:end_time', admin.getMachineMetrics);
 
 
 module.exports = router;
