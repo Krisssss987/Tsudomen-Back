@@ -76,8 +76,6 @@ async function machineByCompanyId(req, res) {
               JSON_AGG(
                   JSON_BUILD_OBJECT(
                       'machine_part_id', p.machine_part_id,
-                      'machine_part_name', p.machine_part_name,
-                      'machine_part_serial_no', p.machine_part_serial_no,
                       'machine_image_path', p.machine_image_path,
                       'machine_image_name', p.machine_image_name
                   )
@@ -199,8 +197,6 @@ async function machineByCompanyIdFirst(req, res) {
               JSON_AGG(
                   JSON_BUILD_OBJECT(
                       'machine_part_id', p.machine_part_id,
-                      'machine_part_name', p.machine_part_name,
-                      'machine_part_serial_no', p.machine_part_serial_no,
                       'machine_image_path', p.machine_image_path,
                       'machine_image_name', p.machine_image_name
                   )
