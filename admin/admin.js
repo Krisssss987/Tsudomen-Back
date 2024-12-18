@@ -811,9 +811,9 @@ async function getBreakdowns(req, res) {
           a.alarm_code,
           a.alarm_description,
           COALESCE(aa.count, 0) AS count,
-          COALESCE(aa.duration, 0) AS duration,
-          ROUND(COALESCE(aa.count, 0) * 100.0 / NULLIF(tm.total_count, 0), 2) AS cumulative_percent_count,
-          ROUND(COALESCE(aa.duration, 0) * 100.0 / NULLIF(tm.total_duration, 0), 2) AS cumulative_percent_duration
+          COALESCE(ROUND(aa.duration / 3600.0, 2), 0) AS duration,
+          ROUND(COALESCE(aa.count, 0) * 100.0 / NULLIF(tm.total_count, 0), 0) AS cumulative_percent_count,
+          ROUND(COALESCE(aa.duration, 0) * 100.0 / NULLIF(tm.total_duration, 0), 0) AS cumulative_percent_duration
       FROM oee.oee_alarms a
       LEFT JOIN aggregated_alarms aa ON a.alarm_code = aa.alarm_code
       CROSS JOIN total_metrics tm
