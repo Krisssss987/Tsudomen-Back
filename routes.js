@@ -40,6 +40,9 @@ router.get('/get_user_details/:user_id', admin.getUserWithCompanyData); //done
 router.get('/breakdowns/:machine_uid/:start_time/:end_time', admin.getBreakdowns); //done
 router.get('/alarms/:machine_uid/:start_time/:end_time', admin.getMachineMetrics); //done
 
+// State Analysis
+router.get('/timeframes/:machine_uid/:start_time/:end_time/:interval', admin.getMachineTimeFrame);
+
 
 
 
