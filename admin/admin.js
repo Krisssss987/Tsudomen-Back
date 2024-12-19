@@ -930,8 +930,13 @@ async function getMachineTimeFrame(req, res) {
       WHERE company_id = $1;
   `;
 
+  const holidayQuery = `
+      SELECT *
+      FROM oee.oee_holidays
+      WHERE company_id = $1;
+  `;
+
   try {
-    // Fetch machine details
     const machineResult = await db.query(machineQuery, [machine_uid]);
 
     if (machineResult.rows.length === 0) {
@@ -940,152 +945,62 @@ async function getMachineTimeFrame(req, res) {
 
     const { machine_id, company_id } = machineResult.rows[0];
 
-  //   if (interval === 'Shift') {
-  //     const shiftResult = await db.query(shiftQuery, [company_id]);
-  
-  //     if (shiftResult.rows.length === 0) {
-  //         return res.status(404).json({ error: 'No shifts defined for the company' });
-  //     }
-  
-  //     const shiftMetricsQuery = `
-  //         WITH date_range AS (
-  //             SELECT generate_series(
-  //                 $2::timestamp,
-  //                 $3::timestamp,
-  //                 '1 day'::interval
-  //             ) AS date
-  //         ),
-  //         valid_shifts AS (
-  //             SELECT
-  //                 dr.date + (s.start_time || ' IST')::time AS shift_start,
-  //                 dr.date + (s.end_time || ' IST')::time AS shift_end,
-  //                 s.shift_name
-  //             FROM date_range dr
-  //             JOIN (
-  //                 SELECT
-  //                     shift_name,
-  //                     shift_days,
-  //                     start_time,
-  //                     end_time
-  //                 FROM oee.oee_shifts
-  //             ) s
-  //             ON to_char(dr.date, 'DY') IN (
-  //                 SELECT unnest(string_to_array(UPPER(s.shift_days), ','))
-  //             )
-  //             WHERE (dr.date + (s.start_time || ' IST')::time) >= $2::timestamp
-  //               AND (dr.date + (s.end_time || ' IST')::time) <= $3::timestamp
-  //         ),
-  //         shift_data AS (
-  //             SELECT
-  //                 vs.shift_name,
-  //                 vs.shift_start,
-  //                 vs.shift_end,
-  //                 dd."timestamp",
-  //                 dd."data"->>'MC_STATUS' AS mc_status,
-  //                 dd."data"->>'Act Speed' AS act_speed,
-  //                 LEAD(dd."timestamp") OVER (PARTITION BY vs.shift_name, vs.shift_start ORDER BY dd."timestamp") AS next_timestamp
-  //             FROM valid_shifts vs
-  //             JOIN oee.device_data dd
-  //               ON dd."timestamp" BETWEEN vs.shift_start AND vs.shift_end
-  //             WHERE dd.deviceuid = $1
-  //         ),
-  //         metrics AS (
-  //             SELECT
-  //                 shift_name,
-  //                 shift_start,
-  //                 shift_end,
-  //                 SUM(
-  //                     CASE
-  //                         WHEN mc_status = '0' AND next_timestamp > "timestamp" THEN
-  //                             EXTRACT(EPOCH FROM next_timestamp - "timestamp")
-  //                         ELSE 0
-  //                     END
-  //                 ) AS downtime,
-  //                 SUM(
-  //                     CASE
-  //                         WHEN mc_status = '1' AND act_speed::numeric > 0 AND next_timestamp > "timestamp" THEN
-  //                             EXTRACT(EPOCH FROM next_timestamp - "timestamp")
-  //                         ELSE 0
-  //                     END
-  //                 ) AS production_time,
-  //                 SUM(
-  //                     CASE
-  //                         WHEN mc_status = '1' AND act_speed::numeric = 0 AND next_timestamp > "timestamp" THEN
-  //                             EXTRACT(EPOCH FROM next_timestamp - "timestamp")
-  //                         ELSE 0
-  //                     END
-  //                 ) AS setup_time
-  //             FROM shift_data
-  //             GROUP BY shift_name, shift_start, shift_end
-  //         )
-  //         SELECT
-  //             shift_name,
-  //             shift_start,
-  //             shift_end,
-  //             ROUND(downtime, 2) AS downtime,
-  //             ROUND(production_time, 2) AS production_time,
-  //             ROUND(setup_time, 2) AS setup_time
-  //         FROM metrics
-  //         ORDER BY shift_start;
-  //     `;
-  
-  //     const shiftMetrics = await db.query(shiftMetricsQuery, [machine_id, start_time, end_time]);
-  //     return res.status(200).json(shiftMetrics.rows);
-  // }
-  
+    if (interval === 'Shift') {
+
+    }  
 
     const metricsQuery = `
     WITH interval_data AS (
-        SELECT
-            CASE $4
-                WHEN 'Hour' THEN date_trunc('hour', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
-                WHEN 'Day' THEN date_trunc('day', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
-                WHEN 'Week' THEN date_trunc('week', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
-                WHEN 'Month' THEN date_trunc('month', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
-            END AS interval_key,
-            "timestamp",
-            LEAD("timestamp") OVER (PARTITION BY date_trunc('hour', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') ORDER BY "timestamp") AS next_timestamp,
-            "data"->>'MC_STATUS' AS mc_status,
-            "data"->>'Act Speed' AS act_speed
-        FROM oee.device_data
-        WHERE deviceuid = $1
-          AND "timestamp" BETWEEN $2 AND $3
-    ),
-    metrics AS (
-        SELECT
-            interval_key,
-            SUM(
-                CASE
-                    WHEN mc_status = '0' AND next_timestamp > "timestamp" THEN
-                        EXTRACT(EPOCH FROM next_timestamp - "timestamp")
-                    ELSE 0
-                END
-            ) AS downtime,
-            SUM(
-                CASE
-                    WHEN mc_status = '1' AND act_speed::numeric > 0 AND next_timestamp > "timestamp" THEN
-                        EXTRACT(EPOCH FROM next_timestamp - "timestamp")
-                    ELSE 0
-                END
-            ) AS production_time,
-            SUM(
-                CASE
-                    WHEN mc_status = '1' AND act_speed::numeric = 0 AND next_timestamp > "timestamp" THEN
-                        EXTRACT(EPOCH FROM next_timestamp - "timestamp")
-                    ELSE 0
-                END
-            ) AS setup_time
-        FROM interval_data
-        GROUP BY interval_key
-    )
-    SELECT
-        interval_key,
-        ROUND(downtime/3600, 2) AS downtime,
-        ROUND(production_time/3600, 2) AS production_time,
-        ROUND(setup_time/3600, 2) AS setup_time
-    FROM metrics
-    ORDER BY interval_key;
-`;
+          SELECT
+              CASE $4
+                  WHEN 'Hour' THEN date_trunc('hour', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+                  WHEN 'Day' THEN date_trunc('day', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+                  WHEN 'Week' THEN date_trunc('week', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+                  WHEN 'Month' THEN date_trunc('month', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+              END AS interval_key,
+              "timestamp",
+              LEAD("timestamp") OVER (PARTITION BY date_trunc('hour', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') ORDER BY "timestamp") AS next_timestamp,
+              "data"->>'MC_STATUS' AS mc_status,
+              "data"->>'Act Speed' AS act_speed
+          FROM oee.device_data
+          WHERE deviceuid = $1
+            AND "timestamp" BETWEEN $2 AND $3
+      ),
+      metrics AS (
+          SELECT
+              interval_key,
+              SUM(
+                  CASE
+                      WHEN mc_status = '0' AND next_timestamp > "timestamp" THEN
+                          EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                      ELSE 0
+                  END
+              ) AS downtime,
+              SUM(
+                  CASE
+                      WHEN mc_status = '1' AND act_speed::numeric > 0 AND next_timestamp > "timestamp" THEN
+                          EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                      ELSE 0
+                  END
+              ) AS production_time,
+              SUM(
+                  CASE
+                      WHEN mc_status = '1' AND act_speed::numeric = 0 AND next_timestamp > "timestamp" THEN
+                          EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                      ELSE 0
+                  END
+              ) AS setup_time
+          FROM interval_data
+          GROUP BY interval_key
+      )
+      SELECT
+          interval_key,
+          ROUND(downtime/3600, 2) AS downtime,
+          ROUND(production_time/3600, 2) AS production_time,
+          ROUND(setup_time/3600, 2) AS setup_time
+      FROM metrics
+      ORDER BY interval_key;
+  `;
 
     const metricsResult = await db.query(metricsQuery, [machine_id, start_time, end_time, interval]);
     res.status(200).json(metricsResult.rows);
