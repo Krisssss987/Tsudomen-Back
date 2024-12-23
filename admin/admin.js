@@ -946,8 +946,100 @@ async function getMachineTimeFrame(req, res) {
     const { machine_id, company_id } = machineResult.rows[0];
 
     if (interval === 'Shift') {
-
-    }  
+      const shiftMetricsQuery = `
+        WITH valid_shifts AS (
+            SELECT 
+                s.shift_id,
+                s.shift_name,
+                s.start_time,
+                s.end_time,
+                sd.date AS shift_date,
+                TO_TIMESTAMP(sd.date || ' ' || s.start_time, 'YYYY-MM-DD HH12:MI AM') AS shift_start_datetime,
+                TO_TIMESTAMP(sd.date || ' ' || s.end_time, 'YYYY-MM-DD HH12:MI AM') AS shift_end_datetime
+            FROM oee.oee_shifts s
+            CROSS JOIN (
+                SELECT generate_series(
+                    DATE($2),
+                    DATE($3),
+                    INTERVAL '1 day'
+                )::DATE AS date
+            ) sd
+            WHERE POSITION(UPPER(TO_CHAR(sd.date, 'DY')) IN UPPER(s.shift_days)) > 0
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM oee.oee_holidays h
+                  WHERE h.company_id = s.company_id
+                    AND h.holiday_date = sd.date::TEXT
+              )
+              AND s.company_id = $4
+        ),
+        shift_data AS (
+            SELECT
+                vs.shift_id,
+                vs.shift_name,
+                vs.shift_date,
+                vs.shift_start_datetime,
+                vs.shift_end_datetime,
+                dd."timestamp",
+                LEAD(dd."timestamp") OVER (
+                    PARTITION BY vs.shift_id, vs.shift_date
+                    ORDER BY dd."timestamp"
+                ) AS next_timestamp,
+                dd."data"->>'MC_STATUS' AS mc_status,
+                dd."data"->>'Act Speed' AS act_speed
+            FROM valid_shifts vs
+            LEFT JOIN oee.device_data dd
+              ON dd.deviceuid = $1
+              AND dd."timestamp" BETWEEN vs.shift_start_datetime AND vs.shift_end_datetime
+        ),
+        shift_metrics AS (
+            SELECT
+                shift_id,
+                shift_name,
+                shift_date,
+                AVG(EXTRACT(EPOCH FROM shift_start_datetime) + EXTRACT(EPOCH FROM shift_end_datetime)) / 2 AS timeframe,
+                SUM(
+                    CASE
+                        WHEN mc_status = '0' AND next_timestamp > "timestamp" THEN
+                            EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                        ELSE 0
+                    END
+                ) AS downtime,
+                SUM(
+                    CASE
+                        WHEN mc_status = '1' AND act_speed::numeric > 0 AND next_timestamp > "timestamp" THEN
+                            EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                        ELSE 0
+                    END
+                ) AS production_time,
+                SUM(
+                    CASE
+                        WHEN mc_status = '1' AND act_speed::numeric = 0 AND next_timestamp > "timestamp" THEN
+                            EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                        ELSE 0
+                    END
+                ) AS setup_time
+            FROM shift_data
+            GROUP BY shift_id, shift_name, shift_date
+        )
+        SELECT
+            shift_name,
+            TO_CHAR(TO_TIMESTAMP(timeframe), 'YYYY-MM-DD HH24:MI') AS timeframe,
+            ROUND(downtime / 3600, 2) AS downtime,
+            ROUND(production_time / 3600, 2) AS production_time,
+            ROUND(setup_time / 3600, 2) AS setup_time
+        FROM shift_metrics
+        ORDER BY shift_name, shift_date;
+      `;
+    
+      const metricsResult = await db.query(shiftMetricsQuery, [
+        machine_id,
+        start_time,
+        end_time,
+        company_id,
+      ]);
+      res.status(200).json(metricsResult.rows);
+    }     
 
     const metricsQuery = `
       WITH interval_data AS (
