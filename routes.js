@@ -41,7 +41,7 @@ router.get('/breakdowns/:machine_uid/:start_time/:end_time', admin.getBreakdowns
 router.get('/alarms/:machine_uid/:start_time/:end_time', admin.getMachineMetrics); //done
 
 // State Analysis
-router.get('/timeframes/:machine_uid/:start_time/:end_time/:interval', admin.getMachineTimeFrame);
+router.get('/timeframes/:machine_uid/:start_time/:end_time/:interval', admin.getMachineTimeFrame); //done
 
 
 
