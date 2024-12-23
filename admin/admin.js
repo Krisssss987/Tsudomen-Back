@@ -1024,7 +1024,7 @@ async function getMachineTimeFrame(req, res) {
         )
         SELECT
             shift_name,
-            TO_CHAR(TO_TIMESTAMP(timeframe), 'YYYY-MM-DD HH24:MI') AS timeframe,
+            TO_CHAR(TO_TIMESTAMP(timeframe), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS interval_key,
             ROUND(downtime / 3600, 2) AS downtime,
             ROUND(production_time / 3600, 2) AS production_time,
             ROUND(setup_time / 3600, 2) AS setup_time
