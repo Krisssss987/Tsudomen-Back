@@ -924,18 +924,6 @@ async function getMachineTimeFrame(req, res) {
       WHERE machine_uid = $1;
   `;
 
-  const shiftQuery = `
-      SELECT *
-      FROM oee.oee_shifts
-      WHERE company_id = $1;
-  `;
-
-  const holidayQuery = `
-      SELECT *
-      FROM oee.oee_holidays
-      WHERE company_id = $1;
-  `;
-
   try {
     const machineResult = await db.query(machineQuery, [machine_uid]);
 
@@ -1031,15 +1019,16 @@ async function getMachineTimeFrame(req, res) {
         FROM shift_metrics
         ORDER BY shift_name, shift_date;
       `;
-    
+
       const metricsResult = await db.query(shiftMetricsQuery, [
         machine_id,
         start_time,
         end_time,
         company_id,
       ]);
-      res.status(200).json(metricsResult.rows);
-    }     
+
+      return res.status(200).json(metricsResult.rows);
+    }
 
     const metricsQuery = `
       WITH interval_data AS (
@@ -1095,10 +1084,10 @@ async function getMachineTimeFrame(req, res) {
     `;
 
     const metricsResult = await db.query(metricsQuery, [machine_id, start_time, end_time, interval]);
-    res.status(200).json(metricsResult.rows);
+    return res.status(200).json(metricsResult.rows);
   } catch (err) {
     console.error('Error fetching machine metrics:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }
 
