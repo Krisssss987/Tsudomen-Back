@@ -33,7 +33,7 @@ router.put('/edit_holiday/:holiday_id', admin.updateHoliday);
 router.post('/add_holiday', admin.addHoliday); //done
 
 router.get('/get_operators/:machine_id', admin.getOperatorsByMachine);
-router.post('/add_operators', admin.addOperators);
+router.post('/add_operators', admin.addOperators); //done
 
 // Technical Support
 router.post('/make_request', admin.makeRequest); //done

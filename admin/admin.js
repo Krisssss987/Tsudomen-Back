@@ -660,7 +660,11 @@ async function getOperatorsByMachine(req, res) {
 
   const operatorQuery = `
     SELECT 
-      *
+      operator_id, 
+      operator_name, 
+      machine_id, 
+      created_by, 
+      company_id
     FROM 
       oee.oee_operators
     WHERE 
@@ -672,7 +676,7 @@ async function getOperatorsByMachine(req, res) {
 
     const responseData = operatorResult.rows;
 
-    if (responseData.operators.length === 0) {
+    if (responseData.length === 0) {
       return res.status(404).json({ error: 'No operators found for the specified machine' });
     }
 
