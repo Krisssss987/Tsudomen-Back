@@ -32,7 +32,7 @@ router.delete('/delete_holiday/:holiday_id', admin.deleteHoliday); //done
 router.put('/edit_holiday/:holiday_id', admin.updateHoliday);
 router.post('/add_holiday', admin.addHoliday); //done
 
-router.get('/get_operators/:machine_id', admin.getOperatorsByMachine);
+router.get('/get_operators/:machine_id', admin.getOperatorsByMachine); //done
 router.post('/add_operators', admin.addOperators); //done
 
 // Technical Support
