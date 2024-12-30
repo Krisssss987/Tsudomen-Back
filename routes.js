@@ -32,6 +32,9 @@ router.delete('/delete_holiday/:holiday_id', admin.deleteHoliday); //done
 router.put('/edit_holiday/:holiday_id', admin.updateHoliday);
 router.post('/add_holiday', admin.addHoliday); //done
 
+router.get('/get_operators/:machine_id', admin.getOperatorsByMachine);
+
+
 // Technical Support
 router.post('/make_request', admin.makeRequest); //done
 router.get('/get_user_details/:user_id', admin.getUserWithCompanyData); //done

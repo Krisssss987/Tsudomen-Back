@@ -655,6 +655,112 @@ async function deleteHoliday(req, res) {
   }
 }
 
+async function getOperatorsByMachine(req, res) {
+  const { machine_id } = req.params;
+
+  const operatorQuery = `
+    SELECT 
+      *
+    FROM 
+      oee.oee_operators
+    WHERE 
+      machine_id = $1
+  `;
+
+  try {
+    const operatorResult = await db.query(operatorQuery, [machine_id]);
+
+    const responseData = operatorResult.rows;
+
+    if (responseData.operators.length === 0) {
+      return res.status(404).json({ error: 'No operators found for the specified machine' });
+    }
+
+    res.status(200).json(responseData);
+  } catch (err) {
+    console.error('Error fetching operators data:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function addOperators(req, res) {
+  const { machine_id, created_by, company_id, operators } = req.body;
+
+  if (!machine_id || !created_by || !company_id || !Array.isArray(operators)) {
+    return res.status(400).json({ error: 'Invalid input. Please provide machine_id, created_by, company_id, and operators array.' });
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const existingOperatorsQuery = `
+      SELECT operator_name, operator_id
+      FROM oee.oee_operators
+      WHERE machine_id = $1
+    `;
+    const existingOperatorsResult = await client.query(existingOperatorsQuery, [machine_id]);
+    const existingOperatorNames = existingOperatorsResult.rows.map(row => row.operator_name);
+    const existingOperatorIds = existingOperatorsResult.rows.reduce((acc, row) => {
+      acc[row.operator_name] = row.operator_id;
+      return acc;
+    }, {});
+
+    const operatorsToAdd = [];
+    const operatorsToDelete = [];
+
+    operators.forEach(operator => {
+      if (!existingOperatorNames.includes(operator)) {
+        operatorsToAdd.push({
+          operator_name: operator,
+          machine_id,
+          created_by,
+          company_id
+        });
+      }
+    });
+
+    existingOperatorNames.forEach(operator => {
+      if (!operators.includes(operator)) {
+        operatorsToDelete.push(existingOperatorIds[operator]);
+      }
+    });
+
+    if (operatorsToAdd.length > 0) {
+      const insertOperatorsQuery = `
+        INSERT INTO oee.oee_operators (operator_name, machine_id, created_by, company_id)
+        VALUES ($1, $2, $3, $4)
+        RETURNING operator_id
+      `;
+      for (const operator of operatorsToAdd) {
+        await client.query(insertOperatorsQuery, [operator.operator_name, operator.machine_id, operator.created_by, operator.company_id]);
+      }
+    }
+
+    if (operatorsToDelete.length > 0) {
+      const deleteOperatorsQuery = `
+        DELETE FROM oee.oee_operators 
+        WHERE operator_id = ANY($1)
+      `;
+      await client.query(deleteOperatorsQuery, [operatorsToDelete]);
+    }
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      message: 'Operators updated successfully',
+      added: operatorsToAdd.length,
+      deleted: operatorsToDelete.length,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error adding/updating operators:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+}
+
 // Technical Support
 async function makeRequest(req, res) {
   const { request_subject, division, product_family, machine_brand, type_of_request, created_by, machine_uid, description } = req.body;
@@ -1108,5 +1214,7 @@ module.exports = {
   machineByCompanyIdFirst,
   getBreakdowns,
   getMachineMetrics,
-  getMachineTimeFrame
+  getMachineTimeFrame,
+  getOperatorsByMachine,
+  addOperators
 }
