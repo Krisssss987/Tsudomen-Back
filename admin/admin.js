@@ -1,3 +1,4 @@
+const { json } = require('express');
 const db = require('../db');
 const axios = require('axios');
 
@@ -1201,6 +1202,35 @@ async function getMachineTimeFrame(req, res) {
   }
 }
 
+// notification
+async function addNotificationConfiguration(req, res) {
+  const { warning_name, machine_id, parameters } = req.body;
+
+  if (!warning_name || !machine_id) {
+    return res.status(400).json({ error: 'warning_name and machine_id are required' });
+  }
+
+  const insertQuery = `
+    INSERT INTO oee.oee_notification_configuration (
+      warning_name, 
+      machine_id, 
+      parameters
+    ) VALUES ($1, $2, $3)
+    RETURNING *;
+  `;
+
+  try {
+    const result = await db.query(insertQuery, [warning_name, machine_id, JSON.stringify(parameters)]);
+    res.status(201).json({
+      message: 'Notification configuration added successfully'
+    });
+  } catch (err) {
+    console.error('Error adding notification configuration:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+
 module.exports = {
   machineByCompanyId,
   getMachineName,
@@ -1220,5 +1250,6 @@ module.exports = {
   getMachineMetrics,
   getMachineTimeFrame,
   getOperatorsByMachine,
-  addOperators
+  addOperators,
+  addNotificationConfiguration
 }
