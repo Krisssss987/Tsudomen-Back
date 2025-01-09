@@ -781,10 +781,11 @@ async function makeRequest(req, res) {
     return res.status(400).json({ error: 'All fields except description are required' });
   }
 
-  const config_id = uuidv4();
+  const request_id = uuidv4();
 
   const query = `
     INSERT INTO oee.customer_support (
+      request_id,
       request_subject, 
       division, 
       product_family, 
@@ -795,12 +796,13 @@ async function makeRequest(req, res) {
       machine_uid, 
       request_status
     ) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING *;
   `;
 
   try {
     const result = await db.query(query, [
+      request_id,
       request_subject,
       division,
       product_family,
