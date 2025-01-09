@@ -1,6 +1,7 @@
 const { json } = require('express');
 const db = require('../db');
 const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 
 async function getMachineName(req, res) {
     const { machine_id } = req.params;
@@ -456,20 +457,23 @@ async function addShift(req, res) {
     return res.status(400).json({ error: 'All fields are required' });
   }
 
+  const shift_id = uuidv4();
+
   const query = `
     INSERT INTO oee.oee_shifts (
+      shift_id,
       shift_name, 
       start_time, 
       end_time, 
       shift_days, 
       created_by, 
       company_id
-    ) VALUES ($1, $2, $3, $4, $5, $6)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING *;
   `;
 
   try {
-    const result = await db.query(query, [shift_name, start_time, end_time, shift_days, created_by, company_id]);
+    const result = await db.query(query, [shift_id, shift_name, start_time, end_time, shift_days, created_by, company_id]);
     res.status(201).json({
       message: 'Shift added successfully',
       shift_id: result.rows[0].shift_id
