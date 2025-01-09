@@ -740,12 +740,12 @@ async function addOperators(req, res) {
 
     if (operatorsToAdd.length > 0) {
       const insertOperatorsQuery = `
-        INSERT INTO oee.oee_operators (operator_name, machine_id, created_by, company_id)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO oee.oee_operators (operator_id, operator_name, machine_id, created_by, company_id)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING operator_id
       `;
       for (const operator of operatorsToAdd) {
-        await client.query(insertOperatorsQuery, [operator.operator_name, operator.machine_id, operator.created_by, operator.company_id]);
+        await client.query(insertOperatorsQuery, [uuidv4(), operator.operator_name, operator.machine_id, operator.created_by, operator.company_id]);
       }
     }
 
@@ -780,6 +780,8 @@ async function makeRequest(req, res) {
   if (!request_subject || !division || !product_family || !machine_brand || !type_of_request || !created_by || !machine_uid) {
     return res.status(400).json({ error: 'All fields except description are required' });
   }
+
+  const config_id = uuidv4();
 
   const query = `
     INSERT INTO oee.customer_support (
@@ -1217,17 +1219,20 @@ async function addNotificationConfiguration(req, res) {
     return res.status(400).json({ error: 'warning_name and machine_id are required' });
   }
 
+  const config_id = uuidv4();
+
   const insertQuery = `
     INSERT INTO oee.oee_notification_configuration (
+      config_id,
       warning_name, 
       machine_id, 
       parameters
-    ) VALUES ($1, $2, $3)
+    ) VALUES ($1, $2, $3, $4)
     RETURNING *;
   `;
 
   try {
-    const result = await db.query(insertQuery, [warning_name, machine_id, JSON.stringify(parameters)]);
+    const result = await db.query(insertQuery, [config_id, warning_name, machine_id, JSON.stringify(parameters)]);
     res.status(201).json({
       message: 'Notification configuration added successfully'
     });
