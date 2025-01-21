@@ -37,7 +37,6 @@ router.post('/add_operators', admin.addOperators); //done ////
 
 // Technical Support
 router.post('/make_request', admin.makeRequest); //done ////
-router.get('/get_user_details/:user_id', admin.getUserWithCompanyData); //done ////
 
 // breakdowns
 router.get('/breakdowns/:machine_uid/:start_time/:end_time', admin.getBreakdowns); //done ////
@@ -49,7 +48,7 @@ router.get('/timeframes/:machine_uid/:start_time/:end_time/:interval', admin.get
 // notification
 router.post('/add_notification', admin.addNotificationConfiguration); ////
 
-
-
+// profile
+router.get('/get_user_details/:user_id', admin.getUserWithCompanyData); //done ////
 
 module.exports = router;
