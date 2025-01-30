@@ -51,8 +51,8 @@ router.post('/add_notification', admin.addNotificationConfiguration); ////
 
 // profile
 router.get('/get_user_details/:user_id', admin.getUserWithCompanyData); //done ////
-router.put('/edit_user/:user_id', data.edit_user);
-router.put('/change_password/:user_id', data.change_password);
-router.put('/update_company_info/:company_id', data.update_company_info);
+router.put('/edit_user/:user_id', data.edit_user); //done
+router.put('/change_password/:user_id', data.change_password);  //done
+router.put('/update_company_info/:company_id', data.update_company_info); //done
 
 module.exports = router;
