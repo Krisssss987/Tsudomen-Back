@@ -1,4 +1,5 @@
 const db = require('../db');
+const { v4: uuidv4 } = require('uuid');
 
 async function edit_user(req, res) {
   const user_id = req.params.user_id;
@@ -102,9 +103,90 @@ async function update_company_info(req, res) {
   });
 }
 
+async function addMachine(req, res) {
+  const {
+    machine_id,
+    machine_name,
+    machine_plant,
+    machine_model,
+    machine_customer,
+    machine_location,
+    machine_longitude,
+    machine_latitude,
+    machine_type_name,
+    company_id,
+    machine_image
+  } = req.body;
+
+  if (!machine_name || !machine_type_name || !company_id) {
+    return res.status(400).json({ error: 'Machine name, machine type, and company ID are required' });
+  }
+
+  try {
+    let machine_type_id;
+    
+    const typeQuery = 'SELECT machine_type_id FROM oee.oee_machine_type WHERE machine_type_name = $1';
+    const typeResult = await db.query(typeQuery, [machine_type_name]);
+
+    if (typeResult.rows.length > 0) {
+      machine_type_id = typeResult.rows[0].machine_type_id;
+    } else {
+      machine_type_id = uuidv4();
+      const insertTypeQuery = 'INSERT INTO oee.oee_machine_type (machine_type_id, machine_type_name) VALUES ($1, $2)';
+      await db.query(insertTypeQuery, [machine_type_id, machine_type_name]);
+    }
+
+    const machine_uid = uuidv4();
+    const insertMachineQuery = `
+      INSERT INTO oee.oee_machine (
+        machine_uid, machine_id, machine_name, machine_plant, machine_model,
+        machine_customer, machine_location, machine_longitude, machine_latitude,
+        machine_type_id, company_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *;
+    `;
+
+    const machineResult = await db.query(insertMachineQuery, [
+      machine_uid,
+      machine_id,
+      machine_name,
+      machine_plant,
+      machine_model,
+      machine_customer,
+      machine_location,
+      machine_longitude,
+      machine_latitude,
+      machine_type_id,
+      company_id
+    ]);
+
+    if (machine_image) {
+      const machine_part_id = uuidv4();
+      const insertImageQuery = `
+        INSERT INTO oee.oee_machine_parts (machine_part_id, machine_id, machine_image_path, machine_image_name)
+        VALUES ($1, $2, $3, $4);
+      `;
+      await db.query(insertImageQuery, [
+        machine_part_id,
+        machine_uid,
+        machine_image,
+        `${machine_name}_image`
+      ]);
+    }
+
+    res.status(201).json({
+      message: 'Machine added successfully',
+      machine_uid: machineResult.rows[0].machine_uid
+    });
+  } catch (err) {
+    console.error('Error adding machine:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 
 module.exports = {
     edit_user,
     change_password,
-    update_company_info
+    update_company_info,
+    addMachine
 }
