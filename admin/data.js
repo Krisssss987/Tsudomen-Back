@@ -183,10 +183,93 @@ async function addMachine(req, res) {
   }
 }
 
+async function updateMachine(req, res) {
+  const { machine_uid } = req.params;
+  const {
+    machine_id,
+    machine_name,
+    machine_plant,
+    machine_model,
+    machine_customer,
+    machine_location,
+    machine_longitude,
+    machine_latitude,
+    machine_type_name,
+    company_id,
+    machine_image
+  } = req.body;
+
+  if (!machine_uid || !company_id) {
+    return res.status(400).json({ error: 'Machine UID and company ID are required' });
+  }
+
+  try {
+    let machine_type_id;
+    
+    // Check if machine type exists
+    const typeQuery = 'SELECT machine_type_id FROM oee.oee_machine_type WHERE machine_type_name = $1';
+    const typeResult = await db.query(typeQuery, [machine_type_name]);
+
+    if (typeResult.rows.length > 0) {
+      machine_type_id = typeResult.rows[0].machine_type_id;
+    } else {
+      // Insert new machine type
+      machine_type_id = uuidv4();
+      const insertTypeQuery = 'INSERT INTO oee.oee_machine_type (machine_type_id, machine_type_name) VALUES ($1, $2)';
+      await db.query(insertTypeQuery, [machine_type_id, machine_type_name]);
+    }
+
+    const updateMachineQuery = `
+      UPDATE oee.oee_machine
+      SET machine_id = $2, machine_name = $3, machine_plant = $4, machine_model = $5,
+          machine_customer = $6, machine_location = $7, machine_longitude = $8, machine_latitude = $9,
+          machine_type_id = $10
+      WHERE machine_uid = $1 AND company_id = $11
+      RETURNING *;
+    `;
+
+    const updateResult = await db.query(updateMachineQuery, [
+      machine_uid,
+      machine_id,
+      machine_name,
+      machine_plant,
+      machine_model,
+      machine_customer,
+      machine_location,
+      machine_longitude,
+      machine_latitude,
+      machine_type_id,
+      company_id
+    ]);
+
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Machine not found' });
+    }
+
+    if (machine_image) {
+      const updateImageQuery = `
+        UPDATE oee.oee_machine_parts
+        SET machine_image_path = $1
+        WHERE machine_id = $2;
+      `;
+      await db.query(updateImageQuery, [machine_image, machine_uid]);
+    }
+
+    res.status(200).json({
+      message: 'Machine updated successfully',
+      updatedMachine: updateResult.rows[0].machine_uid
+    });
+  } catch (err) {
+    console.error('Error updating machine:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 
 module.exports = {
     edit_user,
     change_password,
     update_company_info,
-    addMachine
+    addMachine,
+    updateMachine
 }
