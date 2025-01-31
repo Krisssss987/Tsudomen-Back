@@ -19,7 +19,7 @@ router.get('/machine_data/:company_id/:start_date/:end_date', admin.machineByCom
 router.get('/machine_data_first/:company_id', admin.machineByCompanyIdFirst); //done ////
 router.get('/single_machine_data/:machine_id', admin.getMachineName); //done ////
 router.post('/add_machine', data.addMachine);
-router.put('/update_machine/:machine_id', data.updateMachine);
+router.put('/update_machine/:machine_uid', data.updateMachine);
 
 // oee
 router.get('/device_data/:device_id/:start_date/:end_date', admin.dataByDeviceId); ////

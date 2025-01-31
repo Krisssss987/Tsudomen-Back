@@ -265,11 +265,34 @@ async function updateMachine(req, res) {
   }
 }
 
+async function deleteMachine(req, res) {
+  const { machine_uid } = req.params;
+
+  if (!machine_uid) {
+    return res.status(400).json({ error: 'Machine UID is required' });
+  }
+
+  try {
+    const deleteQuery = 'DELETE FROM oee.oee_machine WHERE machine_uid = $1 RETURNING *';
+    const deleteResult = await db.query(deleteQuery, [machine_uid]);
+
+    if (deleteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Machine not found' });
+    }
+
+    res.status(200).json({ message: 'Machine deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting machine:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 
 module.exports = {
     edit_user,
     change_password,
     update_company_info,
     addMachine,
-    updateMachine
+    updateMachine,
+    deleteMachine
 }
