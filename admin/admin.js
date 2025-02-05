@@ -73,14 +73,14 @@ async function machineByCompanyId(req, res) {
           m.company_id,
           
           COALESCE(
-              JSON_AGG(
-                  JSON_BUILD_OBJECT(
-                      'machine_part_id', p.machine_part_id,
-                      'machine_image_path', p.machine_image_path,
-                      'machine_image_name', p.machine_image_name
-                  )
-              ) FILTER (WHERE p.machine_part_id IS NOT NULL),
-              '[]'
+              (
+                  SELECT p.machine_image_path
+                  FROM oee.oee_machine_parts p
+                  WHERE p.machine_id = m.machine_uid
+                  ORDER BY p.machine_part_id ASC
+                  LIMIT 1
+              ),
+              ''
           ) AS model_data,
           
           COALESCE(
@@ -181,47 +181,34 @@ async function machineByCompanyIdFirst(req, res) {
 
   const query = `
       SELECT 
-          m.machine_uid,
-          m.machine_id,
-          m.machine_name,
-          m.machine_plant,
-          m.machine_model,
-          m.machine_customer,
-          m.machine_location,
-          m.machine_longitude,
-          m.machine_latitude,
-          mt.machine_type_name,
-          m.company_id,
-          
-          COALESCE(
-              JSON_AGG(
-                  JSON_BUILD_OBJECT(
-                      'machine_part_id', p.machine_part_id,
-                      'machine_image_path', p.machine_image_path,
-                      'machine_image_name', p.machine_image_name
-                  )
-              ) FILTER (WHERE p.machine_part_id IS NOT NULL),
-              '[]'
-          ) AS model_data
+        m.machine_uid,
+        m.machine_id,
+        m.machine_name,
+        m.machine_plant,
+        m.machine_model,
+        m.machine_customer,
+        m.machine_location,
+        m.machine_longitude,
+        m.machine_latitude,
+        mt.machine_type_name,
+        m.company_id,
 
-      FROM oee.oee_machine m
-      JOIN oee.oee_machine_type mt 
-      ON m.machine_type_id = mt.machine_type_id
-      LEFT JOIN oee.oee_machine_parts p 
-      ON m.machine_uid = p.machine_id
-      WHERE m.company_id = $1
-      GROUP BY 
-          m.machine_uid, 
-          m.machine_id, 
-          m.machine_name, 
-          m.machine_plant, 
-          m.machine_model, 
-          m.machine_customer, 
-          m.machine_location, 
-          m.machine_longitude, 
-          m.machine_latitude, 
-          mt.machine_type_name,
-          m.company_id;
+        COALESCE(
+            (
+                SELECT p.machine_image_path
+                FROM oee.oee_machine_parts p
+                WHERE p.machine_id = m.machine_uid
+                ORDER BY p.machine_part_id ASC
+                LIMIT 1
+            ),
+            ''
+        ) AS model_data
+
+    FROM oee.oee_machine m
+    JOIN oee.oee_machine_type mt 
+        ON m.machine_type_id = mt.machine_type_id
+
+    WHERE m.company_id = $1;
   `;
 
   try {

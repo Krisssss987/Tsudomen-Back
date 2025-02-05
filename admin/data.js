@@ -114,8 +114,8 @@ async function addMachine(req, res) {
     machine_longitude,
     machine_latitude,
     machine_type_name,
-    company_id,
-    machine_image
+    machine_image,
+    company_id
   } = req.body;
 
   if (!machine_name || !machine_type_name || !company_id) {
