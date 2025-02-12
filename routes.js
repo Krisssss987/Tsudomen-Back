@@ -3,6 +3,7 @@ const auth = require('./authentication/authentication')
 const admin = require('./admin/admin')
 const data = require('./admin/data')
 const router = express.Router();
+const { authenticateUser } = require('./token/jwtUtils');
 
 // authentication
 router.post('/register', auth.register); ////

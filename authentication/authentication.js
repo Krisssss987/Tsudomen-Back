@@ -151,7 +151,12 @@ async function loginUser(req, res) {
       return res.status(402).json({ message: 'Invalid credentials' });
     }
 
-    const jwtToken = jwtUtils.generateToken({ userName: Username });
+    const jwtToken = jwtUtils.generateToken({ 
+      userName: Username, 
+      userId: user.user_id, 
+      companyId: user.company_id 
+    });
+
     res.status(200).json({ message: 'Login successful', token: jwtToken });
 
   } catch (error) {
@@ -159,6 +164,7 @@ async function loginUser(req, res) {
     res.status(500).json({ message: 'Internal server error', error });
   }
 }
+
 
 async function getUserDetails(req, res) {
   try {
@@ -169,14 +175,11 @@ async function getUserDetails(req, res) {
 
     const token = req.headers.authorization.split(' ')[1];
 
-    const decodedToken = jwtUtils.verifyToken(token);
-    if (!decodedToken) {
-      console.log('Invalid Token');
-      return res.status(401).json({ message: 'Invalid token' });
-    }
+    // Use await since verifyToken now returns a Promise
+    const decodedToken = await jwtUtils.verifyToken(token);
 
-    const fetchUserQuery = 'SELECT * FROM oee.oee_user_info WHERE "personal_email" = $1';
-    const fetchCompanyQuery = `SELECT * FROM oee.oee_company_info WHERE "company_id" = $1`;
+    const fetchUserQuery = 'SELECT user_id, first_name, last_name, personal_email, designation, company_id FROM oee.oee_user_info WHERE personal_email = $1';
+    const fetchCompanyQuery = 'SELECT * FROM oee.oee_company_info WHERE company_id = $1';
 
     const userResult = await db.query(fetchUserQuery, [decodedToken.userName]);
 
@@ -185,20 +188,19 @@ async function getUserDetails(req, res) {
     }
 
     const userDetail = userResult.rows[0];
-
     const companyResult = await db.query(fetchCompanyQuery, [userDetail.company_id]);
-
     const companyDetails = companyResult.rows[0];
 
     return res.status(200).json({
-      getUserDetails: userDetail,
+      userDetails: userDetail,
       companyDetails: companyDetails,
     });
   } catch (error) {
     console.error('Error during fetching details:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
-} 
+}
+
 
 async function sendResetTokenEmail(personalemail, resetToken) {
   const transporter = nodemailer.createTransport({
