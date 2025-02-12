@@ -18,7 +18,6 @@ async function getMachineName(req, res) {
         if (result.rows.length === 0) {
             return res.status(404).json(encryptData({ error: 'Unable to find any machines found' }));
         }
-        console.log(result.rows);
         //res.status(200).json(encryptData(result.rows));
         res.status(200).json(result.rows);
     } catch (err) {
@@ -189,17 +188,95 @@ async function machineDataWithDetailsAndStatus(req, res) {
             return res.status(404).json(encryptData({ error: 'No machines found for this company' }));
         }
 
-        console.log(result.rows);
-        return res.status(200).json(encryptData(result.rows)); // 🔒 Encrypting the response
+        //return res.status(200).json(encryptData(result.rows));
+        return res.status(200).json(result.rows);
     } catch (err) {
         console.error('Error fetching machine data with status:', err);
         return res.status(500).json(encryptData({ error: 'Internal server error' }));
     }
 }
 
+async function machineProductionData(req, res) {
+    const user = req.user;
+
+    if (!user || !user.companyId) {
+        return res.status(403).json(encryptData({ error: 'Unauthorized access. Invalid token.' }));
+    }
+
+    const query = `
+        WITH month_data AS (
+            SELECT 
+                dd.deviceuid AS machine_id,
+                DATE_TRUNC('month', dd.timestamp) AS month_start,
+                MAX((dd.data->>'This Month Production')::NUMERIC) - MIN((dd.data->>'This Month Production')::NUMERIC) AS production_length
+            FROM oee.device_data dd
+            WHERE dd.timestamp >= TO_TIMESTAMP($1, 'YYYY-MM-DD HH24:MI:SS')
+            AND dd.timestamp <= TO_TIMESTAMP($2, 'YYYY-MM-DD HH24:MI:SS')
+            AND dd.data::jsonb ? 'This Month Production'
+            GROUP BY dd.deviceuid, month_start
+        ),
+
+        reel_changes AS (
+            SELECT 
+                dd.deviceuid AS machine_id,
+                dd.data->>'P_DT_BOBIN_FORMER_CHANGE' AS current_value,
+                LAG(dd.data->>'P_DT_BOBIN_FORMER_CHANGE') OVER (PARTITION BY dd.deviceuid ORDER BY dd.timestamp) AS prev_value
+            FROM oee.device_data dd
+            WHERE dd.timestamp >= TO_TIMESTAMP($1, 'YYYY-MM-DD HH24:MI:SS')
+            AND dd.timestamp <= TO_TIMESTAMP($2, 'YYYY-MM-DD HH24:MI:SS')
+            AND dd.data::jsonb ? 'P_DT_BOBIN_FORMER_CHANGE'
+        ),
+
+        reel_transitions AS (
+            SELECT 
+                machine_id,
+                COUNT(*) AS produced_reels
+            FROM reel_changes
+            WHERE prev_value = '0' AND current_value = '1'
+            GROUP BY machine_id
+        )
+
+        SELECT 
+            m.machine_uid,
+            -- m.machine_id,
+            -- m.machine_name,
+            -- m.machine_plant,
+            -- m.company_id,
+            COALESCE(SUM(md.production_length), 0) AS produced_length,
+            COALESCE(rt.produced_reels, 0) AS produced_reels
+        FROM oee.oee_machine m
+        LEFT JOIN month_data md ON m.machine_id = md.machine_id
+        LEFT JOIN reel_transitions rt ON m.machine_id = rt.machine_id
+        WHERE m.company_id = $3
+        GROUP BY m.machine_uid, m.machine_id, m.machine_name, m.machine_plant, m.company_id, rt.produced_reels;
+    `;
+
+    try {
+        const { start_date, end_date } = req.query;
+
+        if (!start_date || !end_date) {
+            return res.status(400).json(encryptData({ error: 'Missing start_date or end_date' }));
+        }
+
+        const result = await db.query(query, [start_date, end_date, user.companyId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json(encryptData({ error: 'No production data found for this company' }));
+        }
+
+        return res.status(200).json(result.rows);
+        //return res.status(200).json(encryptData(result.rows));
+    } catch (err) {
+        console.error('Error fetching machine production data:', err);
+        return res.status(500).json(encryptData({ error: 'Internal server error' }));
+    }
+}
+
+
 
 
 module.exports = {
     getMachineName,
-    machineDataWithDetailsAndStatus
+    machineDataWithDetailsAndStatus,
+    machineProductionData
 }

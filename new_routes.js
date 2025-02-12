@@ -19,5 +19,6 @@ router.post('/reset-password', auth.resetPassword);
 // Recovered Apis with All kind of Security Implemented
 router.get('/single_machine_data/:machine_id', authenticateUser, admin.getMachineName);
 router.get('/machineDataWithDetailsAndStatus', authenticateUser, admin.machineDataWithDetailsAndStatus);
+router.get('/machineProductionData', authenticateUser, admin.machineProductionData);
 
 module.exports = router;
