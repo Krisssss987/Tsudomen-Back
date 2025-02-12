@@ -20,5 +20,8 @@ router.post('/reset-password', auth.resetPassword);
 router.get('/single_machine_data/:machine_id', authenticateUser, admin.getMachineName);
 router.get('/machineDataWithDetailsAndStatus', authenticateUser, admin.machineDataWithDetailsAndStatus);
 router.get('/machineProductionData', authenticateUser, admin.machineProductionData);
+router.get('/machineOEEForCompany', authenticateUser, admin.machineOEEForCompany);
+
+router.get('/machineCompleteData', authenticateUser, admin.machineCompleteData);
 
 module.exports = router;
