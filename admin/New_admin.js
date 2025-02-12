@@ -18,8 +18,8 @@ async function getMachineName(req, res) {
         if (result.rows.length === 0) {
             return res.status(404).json(encryptData({ error: 'Unable to find any machines found' }));
         }
-        //res.status(200).json(encryptData(result.rows));
-        res.status(200).json(result.rows);
+        res.status(200).json(encryptData(result.rows));
+        //res.status(200).json(result.rows);
     } catch (err) {
         console.error('Error fetching data:', err);
         res.status(500).json(encryptData({ error: 'Internal server error' }));
