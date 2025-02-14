@@ -4,6 +4,7 @@ const admin = require('./admin/New_admin')
 const data = require('./admin/data')
 const router = express.Router();
 const { authenticateUser } = require('./token/jwtUtils');
+const admin2 = require('./admin/admin')
 
 // Authentication API's for the Login and other Purpose
 router.post('/register', auth.register);
@@ -23,5 +24,10 @@ router.get('/machineProductionData', authenticateUser, admin.machineProductionDa
 router.get('/machineOEEForCompany', authenticateUser, admin.machineOEEForCompany);
 
 router.get('/machineCompleteData', authenticateUser, admin.machineCompleteData);
+
+
+router.post('/add_notification_configuration', admin2.addNotificationConfiguration);
+router.get('/get_notification_configurations/:machine_id', admin2.getNotificationConfigurations);
+router.delete('/delete_notification_configurations/:config_id', admin2.deleteNotificationConfiguration);
 
 module.exports = router;
