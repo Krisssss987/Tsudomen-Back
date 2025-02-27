@@ -23,5 +23,9 @@ router.get('/machineProductionData', authenticateUser, admin.machineProductionDa
 router.get('/machineOEEForCompany', authenticateUser, admin.machineOEEForCompany);
 
 router.get('/machineCompleteData', authenticateUser, admin.machineCompleteData);
+router.get('/machineOEEForDevice/:deviceUid', authenticateUser, admin.machineOEEForDevice);
+router.get('/machineOEEAggregation/:deviceUid', authenticateUser, admin.machineOEEAggregation);
+router.get('/machineOEEForDeviceIntervalBased/:deviceUid', authenticateUser, admin.machineOEEForDeviceIntervalBased);
+
 
 module.exports = router;

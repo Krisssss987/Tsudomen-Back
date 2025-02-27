@@ -7,7 +7,7 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   connectionTimeoutMillis: 10000,
-  ssl: true
+  ssl: false
 });
 
 pool.connect((err, client, done) => {
