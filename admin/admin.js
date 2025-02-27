@@ -1231,6 +1231,54 @@ async function addNotificationConfiguration(req, res) {
   }
 }
 
+async function getNotificationConfigurations(req, res) {
+  const { machine_id } = req.params;
+
+  if (!machine_id) {
+    return res.status(400).json({ error: 'machine_id is required' });
+  }
+
+  const selectQuery = `
+    SELECT config_id, warning_name, machine_id, parameters
+    FROM oee.oee_notification_configuration
+    WHERE machine_id = $1;
+  `;
+
+  try {
+    const result = await db.query(selectQuery, [machine_id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'No configurations found for this machine_id' });
+    }
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('Error fetching notification configurations:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function deleteNotificationConfiguration(req, res) {  
+  const { config_id } = req.params;
+
+  if (!config_id) {
+    return res.status(400).json({ error: 'config_id is required' });
+  }
+
+  const deleteQuery = `
+    DELETE FROM oee.oee_notification_configuration
+    WHERE config_id = $1;
+  `;
+
+  try {    
+    const result = await db.query(deleteQuery, [config_id]);
+    res.status(200).json({ message: 'Notification configuration deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting notification configuration:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
 
 module.exports = {
   machineByCompanyId,
@@ -1252,5 +1300,7 @@ module.exports = {
   getMachineTimeFrame,
   getOperatorsByMachine,
   addOperators,
-  addNotificationConfiguration
+  addNotificationConfiguration,
+  getNotificationConfigurations,
+  deleteNotificationConfiguration
 }
