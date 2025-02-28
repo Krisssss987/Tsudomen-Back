@@ -561,151 +561,154 @@ async function machineCompleteData(req, res) {
 
     const oeeDataQuery = `
         WITH per_minute_stats AS (
-    SELECT
-        deviceUid AS machine_id,
-        TO_CHAR(DATE_TRUNC('minute', timestamp), 'HH24:MI') AS minute,
-        COUNT(*) AS data_points,
-        SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 1 THEN 1 ELSE 0 END) AS uptime_points,
-        SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 0 THEN 1 ELSE 0 END) AS downtime_points
-    FROM
-        oee.device_data
-    WHERE 
-        deviceUid IN (SELECT machine_id FROM oee.oee_machine WHERE company_id = $1)
-        AND data::jsonb ? 'MC_STATUS'
-        AND timestamp BETWEEN $2 AND $3
-    GROUP BY
-        deviceUid, DATE_TRUNC('minute', timestamp)
-),
+            SELECT
+                deviceUid AS machine_id,
+                TO_CHAR(DATE_TRUNC('minute', timestamp), 'HH24:MI') AS minute,
+                COUNT(*) AS data_points,
+                SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 1 THEN 1 ELSE 0 END) AS uptime_points,
+                SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 0 THEN 1 ELSE 0 END) AS downtime_points
+            FROM
+                oee.device_data
+            WHERE 
+                deviceUid IN (SELECT machine_id FROM oee.oee_machine WHERE company_id = $1)
+                AND data::jsonb ? 'MC_STATUS'
+                AND timestamp BETWEEN $2 AND $3
+            GROUP BY
+                deviceUid, DATE_TRUNC('minute', timestamp)
+            ),
 
-availability AS (
-    SELECT
-        machine_id,
-        (SUM(uptime_points * 1.0 / NULLIF(data_points, 0)) / 
-        NULLIF(SUM(uptime_points * 1.0 / NULLIF(data_points, 0)) + SUM(downtime_points * 1.0 / NULLIF(data_points, 0)), 0)) * 100 
-        AS total_uptime_percentage
-    FROM per_minute_stats
-    GROUP BY machine_id
-),
+            availability AS (
+            SELECT
+                machine_id,
+                (SUM(uptime_points * 1.0 / data_points) / 
+                NULLIF(SUM(uptime_points * 1.0 / data_points) + SUM(downtime_points * 1.0 / data_points), 0)) * 100 AS total_uptime_percentage
+            FROM per_minute_stats
+            GROUP BY machine_id
+            ),
 
-production_data AS (
-    SELECT 
-        deviceUid AS machine_id,
-        (data->>'LINE_SPEED')::numeric AS line_speed,
-        (data->>'ACT_COLD_DIA')::numeric AS diameter,
-        timestamp,
-        LEAD(timestamp) OVER (PARTITION BY deviceUid ORDER BY timestamp) AS next_timestamp
-    FROM oee.device_data
-    WHERE 
-        deviceUid IN (SELECT machine_id FROM oee.oee_machine WHERE company_id = $1)
-        AND data::jsonb ? 'LINE_SPEED'
-        AND timestamp BETWEEN $2 AND $3
-),
+            production_data AS (
+            SELECT 
+                deviceUid AS machine_id,
+                (data->>'LINE_SPEED')::numeric AS line_speed,
+                (data->>'ACT_COLD_DIA')::numeric AS diameter,
+                timestamp,
+                LEAD(timestamp) OVER (PARTITION BY deviceUid ORDER BY timestamp) AS next_timestamp
+            FROM oee.device_data
+            WHERE 
+                deviceUid IN (SELECT machine_id FROM oee.oee_machine WHERE company_id = $1)
+                AND data::jsonb ? 'LINE_SPEED'
+                AND timestamp BETWEEN $2 AND $3
+            ),
 
-calculated_data AS (
-    SELECT 
-        machine_id,
-        line_speed,
-        diameter,
-        EXTRACT(EPOCH FROM (next_timestamp - timestamp)) / 60 AS time_diff_minutes
-    FROM production_data
-    WHERE next_timestamp IS NOT NULL
-),
+            calculated_data AS (
+            SELECT 
+                machine_id,
+                line_speed,
+                diameter,
+                EXTRACT(EPOCH FROM (next_timestamp - timestamp)) / 60 AS time_diff_minutes
+            FROM production_data
+            WHERE next_timestamp IS NOT NULL
+            ),
 
-actual_production_weight AS (
-    SELECT 
-        machine_id,
-        COALESCE(
-        SUM(
-            (3.14159 * ((diameter / 1000 / 2)^2) * 
-            time_diff_minutes * 
-            line_speed * 
-            7860) / 1000
-        ), 0
-        ) AS actual_weight
-    FROM calculated_data
-    GROUP BY machine_id
-),
+            actual_production_weight AS (
+            SELECT 
+                machine_id,
+                COALESCE(
+                SUM(
+                    (3.14159 * ((diameter / 1000 / 2)^2) * 
+                    time_diff_minutes * 
+                    line_speed * 
+                    7860) / 1000
+                ), 0
+                ) AS actual_weight
+            FROM calculated_data
+            GROUP BY machine_id
+            ),
 
-per_minute_stats_for_performance AS (
-    SELECT
-        deviceUid AS machine_id,
-        TO_CHAR(DATE_TRUNC('day', timestamp), 'YYYY-MM-DD') AS date,
-        TO_CHAR(DATE_TRUNC('minute', timestamp), 'HH24:MI') AS minute,
-        COUNT(*) AS data_points,
-        SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 1 THEN 1 ELSE 0 END) AS uptime_points,
-        EXTRACT(EPOCH FROM MAX(timestamp) - MIN(timestamp)) / 60 AS time_diff_minutes,
-        MAX((data->>'LINE_SPEED')::numeric) AS max_speed
-    FROM oee.device_data
-    WHERE 
-        deviceUid IN (SELECT machine_id FROM oee.oee_machine WHERE company_id = $1)
-        AND data::jsonb ? 'MC_STATUS'
-        AND data::jsonb ? 'LINE_SPEED'
-        AND timestamp BETWEEN $2 AND $3
-    GROUP BY deviceUid, DATE_TRUNC('day', timestamp), DATE_TRUNC('minute', timestamp)
-),
+            per_minute_stats_for_performance AS (
+            SELECT
+                deviceUid AS machine_id,
+                TO_CHAR(DATE_TRUNC('day', timestamp), 'YYYY-MM-DD') AS date,
+                TO_CHAR(DATE_TRUNC('minute', timestamp), 'HH24:MI') AS minute,
+                COUNT(*) AS data_points,
+                SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 1 THEN 1 ELSE 0 END) AS uptime_points,
+                EXTRACT(EPOCH FROM MAX(timestamp) - MIN(timestamp)) / 60 AS time_diff_minutes,
+                MAX((data->>'LINE_SPEED')::numeric) AS max_speed
+            FROM oee.device_data
+            WHERE 
+                deviceUid IN (SELECT machine_id FROM oee.oee_machine WHERE company_id = $1)
+                AND data::jsonb ? 'MC_STATUS'
+                AND data::jsonb ? 'LINE_SPEED'
+                AND timestamp BETWEEN $2 AND $3
+            GROUP BY deviceUid, DATE_TRUNC('day', timestamp), DATE_TRUNC('minute', timestamp)
+            ),
 
-daily_max_speed AS (
-    SELECT
-        machine_id,
-        date,
-        MAX(max_speed) AS max_speed
-    FROM per_minute_stats_for_performance
-    GROUP BY machine_id, date
-),
+            daily_max_speed AS (
+            SELECT
+                machine_id,
+                date,
+                MAX(max_speed) AS max_speed
+            FROM per_minute_stats_for_performance
+            GROUP BY machine_id, date
+            ),
 
-target_length AS (
-    SELECT
-        pms.machine_id,
-        SUM(pms.uptime_points * 1.0 / NULLIF(pms.data_points, 0) * dms.max_speed * pms.time_diff_minutes) AS total_length
-    FROM per_minute_stats_for_performance pms
-    JOIN daily_max_speed dms ON pms.machine_id = dms.machine_id AND pms.date = dms.date
-    GROUP BY pms.machine_id
-),
+            target_length AS (
+            SELECT
+                pms.machine_id,
+                SUM(pms.uptime_points * 1.0 / pms.data_points * dms.max_speed * pms.time_diff_minutes) AS total_length
+            FROM per_minute_stats_for_performance pms
+            JOIN daily_max_speed dms ON pms.machine_id = dms.machine_id AND pms.date = dms.date
+            GROUP BY pms.machine_id
+            ),
 
-target_production_weight AS (
-    SELECT
-        cl.machine_id,
-        COALESCE(
-        SUM(
-            (3.14159 * ((dia.diameter / 1000 / 2)^2) * 
-            cl.total_length * 
-            7860) / 1000
-        ), 0
-        ) AS target_weight
-    FROM target_length cl
-    JOIN (
-        SELECT DISTINCT deviceUid AS machine_id, (data->>'ACT_COLD_DIA')::numeric AS diameter
-        FROM oee.device_data
-        WHERE deviceUid IN (SELECT machine_id FROM oee.oee_machine WHERE company_id = $1)
-        AND data::jsonb ? 'ACT_COLD_DIA'
-        AND timestamp BETWEEN $2 AND $3
-    ) dia ON cl.machine_id = dia.machine_id
-    GROUP BY cl.machine_id
-)
+            target_production_weight AS (
+            SELECT
+                cl.machine_id,
+                COALESCE(
+                SUM(
+                    (3.14159 * ((dia.diameter / 1000 / 2)^2) * 
+                    cl.total_length * 
+                    7860) / 1000
+                ), 0
+                ) AS target_weight
+            FROM target_length cl
+            JOIN (
+                SELECT DISTINCT deviceUid AS machine_id, (data->>'ACT_COLD_DIA')::numeric AS diameter
+                FROM oee.device_data
+                WHERE deviceUid IN (SELECT machine_id FROM oee.oee_machine WHERE company_id = $1)
+                AND data::jsonb ? 'ACT_COLD_DIA'
+                AND timestamp BETWEEN $2 AND $3
+            ) dia ON cl.machine_id = dia.machine_id
+            GROUP BY cl.machine_id
+            )
 
-SELECT
-    m.machine_uid,
-    COALESCE(a.total_uptime_percentage, 0) AS Availability,
-    COALESCE(apw.actual_weight, 0) AS actual_weight,
-    COALESCE(tpw.target_weight, 0) AS target_weight,
-    CASE 
-        WHEN COALESCE(tpw.target_weight, 0) = 0 THEN 0
-        ELSE (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100 
-    END AS Performance,
-    CASE 
-        WHEN COALESCE(apw.actual_weight, 0) = 0 THEN 100
-        ELSE (COALESCE(apw.actual_weight, 0) / NULLIF((COALESCE(apw.actual_weight, 0) + 0), 0)) * 100  
-    END AS Quality,
-    CASE 
-        WHEN COALESCE(a.total_uptime_percentage, 0) = 0 OR (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) = 0 THEN 0
-        ELSE (COALESCE(a.total_uptime_percentage, 0) * (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100) / 100
-    END AS OEE
-FROM oee.oee_machine m
-LEFT JOIN availability a ON m.machine_id = a.machine_id
-LEFT JOIN actual_production_weight apw ON m.machine_id = apw.machine_id
-LEFT JOIN target_production_weight tpw ON m.machine_id = tpw.machine_id
-WHERE m.company_id = $1;
+            SELECT
+            m.machine_uid,
+            -- m.machine_id,
+            -- m.machine_name,
+            -- m.machine_plant,
+            COALESCE(a.total_uptime_percentage, 0) AS Availability,
+            COALESCE(apw.actual_weight, 0) AS actual_weight,
+            COALESCE(tpw.target_weight, 0) AS target_weight,
+            CASE 
+                WHEN COALESCE(tpw.target_weight, 0) = 0 THEN 0
+                ELSE (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100
+            END AS Performance,
 
+            CASE 
+                WHEN COALESCE(apw.actual_weight, 0) = 0 THEN 100
+                ELSE (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(apw.actual_weight, 0), 0)) * 100
+            END AS Quality,
+
+            CASE 
+                WHEN COALESCE(a.total_uptime_percentage, 0) = 0 OR COALESCE(tpw.target_weight, 0) = 0 THEN 0
+                ELSE (COALESCE(a.total_uptime_percentage, 0) * (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100) / 100
+            END AS OEE
+            FROM oee.oee_machine m
+            LEFT JOIN availability a ON m.machine_id = a.machine_id
+            LEFT JOIN actual_production_weight apw ON m.machine_id = apw.machine_id
+            LEFT JOIN target_production_weight tpw ON m.machine_id = tpw.machine_id
+            WHERE m.company_id = $1;
     `;
 
     try {
@@ -1118,12 +1121,18 @@ async function machineOEEAggregation(req, res) {
                 COALESCE(tpw.target_weight, 0) AS target_weight,
                 CASE 
                     WHEN COALESCE(tpw.target_weight, 0) = 0 THEN 0
-                    ELSE (COALESCE(apw.actual_weight, 0) / COALESCE(tpw.target_weight, 0)) * 100 
+                    ELSE (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100 
                 END AS Performance,
-                100 AS Quality,
                 CASE 
-                    WHEN COALESCE(a.total_uptime_percentage, 0) = 0 OR (COALESCE(apw.actual_weight, 0) / COALESCE(tpw.target_weight, 0)) = 0 THEN 0
-                    ELSE (COALESCE(a.total_uptime_percentage, 0) * (COALESCE(apw.actual_weight, 0) / COALESCE(tpw.target_weight, 0)) * 100) / 100
+                    WHEN COALESCE(apw.actual_weight, 0) = 0 THEN 100
+                    ELSE (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(apw.actual_weight, 0), 0)) * 100  
+                END AS Quality,
+                CASE 
+                    WHEN COALESCE(a.total_uptime_percentage, 0) = 0 
+                    OR (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) = 0 
+                    THEN 0
+                    ELSE (COALESCE(a.total_uptime_percentage, 0) * 
+                        (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100) / 100
                 END AS OEE
             FROM availability a
             LEFT JOIN actual_production_weight apw ON a.period = apw.period
@@ -1201,8 +1210,8 @@ async function machineOEEForDeviceIntervalBased(req, res) {
             availability AS (
                 SELECT
                     interval,
-                    (SUM(uptime_points * 1.0 / data_points) / 
-                    NULLIF(SUM(uptime_points * 1.0 / data_points) + SUM(downtime_points * 1.0 / data_points), 0)) * 100 AS uptime_percentage
+                    (SUM(uptime_points * 1.0 / NULLIF(data_points, 0)) / 
+                    NULLIF(SUM(uptime_points * 1.0 / NULLIF(data_points, 0)) + SUM(downtime_points * 1.0 / NULLIF(data_points, 0)), 0)) * 100 AS uptime_percentage
                 FROM per_interval_stats
                 GROUP BY interval
             ),
@@ -1266,12 +1275,16 @@ async function machineOEEForDeviceIntervalBased(req, res) {
                 COALESCE(tpw.target_weight, 0) AS target_weight,
                 CASE 
                     WHEN COALESCE(tpw.target_weight, 0) = 0 THEN 0
-                    ELSE (COALESCE(apw.actual_weight, 0) / COALESCE(tpw.target_weight, 0)) * 100 
+                    ELSE (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100 
                 END AS Performance,
                 100 AS Quality,
                 CASE 
-                    WHEN COALESCE(a.uptime_percentage, 0) = 0 OR (COALESCE(apw.actual_weight, 0) / COALESCE(tpw.target_weight, 0)) = 0 THEN 0
-                    ELSE (COALESCE(a.uptime_percentage, 0) * (COALESCE(apw.actual_weight, 0) / COALESCE(tpw.target_weight, 0)) * 100) / 100
+                    WHEN COALESCE(a.uptime_percentage, 0) = 0 
+                    OR COALESCE(tpw.target_weight, 0) = 0
+                    OR COALESCE(apw.actual_weight, 0) = 0
+                    THEN 0
+                    ELSE (COALESCE(a.uptime_percentage, 0) * 
+                        (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100) / 100
                 END AS OEE
             FROM availability a
             LEFT JOIN actual_production_weight apw ON a.interval = apw.interval
