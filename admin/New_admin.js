@@ -1295,6 +1295,94 @@ async function machineOEEForDeviceIntervalBased(req, res) {
     }
 }
 
+async function calculateProductionAndIdleTime(req, res) {
+    const user = req.user;
+    
+    if (!user || !user.companyId) {
+        return res.status(403).json({ error: 'Unauthorized access. Invalid token.' });
+    }
+
+    const { start_date, end_date } = req.query;
+    const { deviceUid } = req.params;
+
+    if (!deviceUid || !start_date || !end_date) {
+        return res.status(400).json({ error: 'Missing deviceUid, start_date, or end_date' });
+    }
+
+    try {
+        const machineCheckQuery = `
+            SELECT machine_id 
+            FROM oee.oee_machine 
+            WHERE machine_uid = $1 AND company_id = $2;
+        `;
+
+        const machineCheckResult = await db.query(machineCheckQuery, [deviceUid, user.companyId]);
+
+        if (machineCheckResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Device not found or does not belong to the company.' });
+        }
+
+        const machineId = machineCheckResult.rows[0].machine_id;
+
+        const query = `
+            WITH machine_status AS (
+                SELECT 
+                    dd.deviceuid AS machine_id,
+                    timestamp,
+                    (data->>'MC_STATUS')::NUMERIC AS mc_status,
+                    (data->>'Act Speed')::NUMERIC AS act_speed,
+                    (data->>'Target Speed')::NUMERIC AS target_speed,
+                    LEAD(timestamp) OVER (PARTITION BY deviceuid ORDER BY timestamp) AS next_timestamp
+                FROM oee.device_data dd
+                WHERE dd.deviceuid = $1 
+                AND dd.timestamp BETWEEN $2::TIMESTAMP AND $3::TIMESTAMP
+            ),
+            time_analysis AS (
+                SELECT 
+                    SUM(
+                        CASE 
+                            WHEN mc_status = 1 AND act_speed > 0 THEN 
+                                LEAST(EXTRACT(EPOCH FROM (COALESCE(next_timestamp, NOW()) - timestamp)) / 60, 15)  -- Max interval limit
+                            WHEN mc_status = 1 AND act_speed < 0.5 * target_speed THEN 
+                                LEAST(EXTRACT(EPOCH FROM (COALESCE(next_timestamp, NOW()) - timestamp)) / 60, 15)  
+                            ELSE 0 
+                        END
+                    ) AS production_time,
+                    SUM(
+                        CASE 
+                            WHEN mc_status = 0 THEN 
+                                LEAST(EXTRACT(EPOCH FROM (COALESCE(next_timestamp, NOW()) - timestamp)) / 60, 15) 
+                            WHEN mc_status = 1 AND act_speed = 0 THEN 
+                                LEAST(EXTRACT(EPOCH FROM (COALESCE(next_timestamp, NOW()) - timestamp)) / 60, 15)  
+                            WHEN next_timestamp IS NULL OR next_timestamp - timestamp > INTERVAL '15 minutes' THEN 
+                                LEAST(EXTRACT(EPOCH FROM (COALESCE(next_timestamp, NOW()) - timestamp)) / 60, 15) 
+                            ELSE 0 
+                        END
+                    ) AS idle_time
+                FROM machine_status
+                WHERE next_timestamp IS NOT NULL OR next_timestamp - timestamp > INTERVAL '15 minutes'
+            )
+            SELECT 
+                COALESCE(production_time, 0) AS total_production_time,
+                COALESCE(idle_time, 0) AS total_idle_time
+            FROM time_analysis;
+        `;
+
+        console.time("DB Query Execution");
+        const result = await db.query(query, [machineId, start_date, end_date]);
+        console.timeEnd("DB Query Execution");
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'No data found for this device' });
+        }
+
+        // return res.status(200).json(result.rows);
+        return res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('Error fetching production and idle time data:', err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
 
 
 module.exports = {
@@ -1305,5 +1393,6 @@ module.exports = {
     machineCompleteData,
     machineOEEForDevice,
     machineOEEAggregation,
-    machineOEEForDeviceIntervalBased
+    machineOEEForDeviceIntervalBased,
+    calculateProductionAndIdleTime
 }

@@ -27,8 +27,7 @@ router.get('/machineCompleteData', authenticateUser, admin.machineCompleteData);
 router.get('/machineOEEForDevice/:deviceUid', authenticateUser, admin.machineOEEForDevice);
 router.get('/machineOEEAggregation/:deviceUid', authenticateUser, admin.machineOEEAggregation);
 router.get('/machineOEEForDeviceIntervalBased/:deviceUid', authenticateUser, admin.machineOEEForDeviceIntervalBased);
-
-
+router.get('/calculateProductionAndIdleTime/:deviceUid', authenticateUser, admin.calculateProductionAndIdleTime);
 
 router.post('/add_notification_configuration', admin2.addNotificationConfiguration);
 router.get('/get_notification_configurations/:machine_id', admin2.getNotificationConfigurations);
