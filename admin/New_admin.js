@@ -1299,14 +1299,14 @@ async function calculateProductionAndIdleTime(req, res) {
     const user = req.user;
     
     if (!user || !user.companyId) {
-        return res.status(403).json({ error: 'Unauthorized access. Invalid token.' });
+        return res.status(403).json(encryptData({ error: 'Unauthorized access. Invalid token.' }));
     }
 
     const { start_date, end_date } = req.query;
     const { deviceUid } = req.params;
 
     if (!deviceUid || !start_date || !end_date) {
-        return res.status(400).json({ error: 'Missing deviceUid, start_date, or end_date' });
+        return res.status(400).json(encryptData({ error: 'Missing deviceUid, start_date, or end_date' }));
     }
 
     try {
@@ -1319,7 +1319,7 @@ async function calculateProductionAndIdleTime(req, res) {
         const machineCheckResult = await db.query(machineCheckQuery, [deviceUid, user.companyId]);
 
         if (machineCheckResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Device not found or does not belong to the company.' });
+            return res.status(404).json(encryptData({ error: 'Device not found or does not belong to the company.' }));
         }
 
         const machineId = machineCheckResult.rows[0].machine_id;
@@ -1373,14 +1373,14 @@ async function calculateProductionAndIdleTime(req, res) {
         console.timeEnd("DB Query Execution");
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'No data found for this device' });
+            return res.status(404).json(encryptData({ error: 'No data found for this device' }));
         }
 
         // return res.status(200).json(result.rows);
-        return res.status(200).json(result.rows);
+        return res.status(200).json(encryptData(result.rows));
     } catch (err) {
         console.error('Error fetching production and idle time data:', err);
-        return res.status(500).json({ error: 'Internal server error' });
+        return res.status(500).json(encryptData({ error: 'Internal server error' }));
     }
 }
 
