@@ -1150,9 +1150,166 @@ async function machineOEEAggregation(req, res) {
     }
 }
 
+// async function machineOEEForDeviceIntervalBased(req, res) {
+//     const user = req.user;
+    
+//     if (!user || !user.companyId) {
+//         return res.status(403).json(encryptData({ error: 'Unauthorized access. Invalid token.' }));
+//     }
+
+//     const { start_date, end_date, interval } = req.query;
+//     const { deviceUid } = req.params;
+
+//     if (!deviceUid || !start_date || !end_date || !interval) {
+//         return res.status(400).json(encryptData({ error: 'Missing deviceUid, start_date, end_date, or interval' }));
+//     }
+
+//     const validIntervals = ['hour', 'day', 'week', 'month'];
+//     if (!validIntervals.includes(interval)) {
+//         return res.status(400).json(encryptData({ error: 'Invalid interval. Must be hour, day, week, or month.' }));
+//     }
+
+//     try {
+//         const machineCheckQuery = `
+//             SELECT machine_id 
+//             FROM oee.oee_machine 
+//             WHERE machine_uid = $1 AND company_id = $2;
+//         `;
+
+//         const machineCheckResult = await db.query(machineCheckQuery, [deviceUid, user.companyId]);
+
+//         if (machineCheckResult.rows.length === 0) {
+//             return res.status(404).json(encryptData({ error: 'Device not found or does not belong to the company.' }));
+//         }
+
+//         const machineId = machineCheckResult.rows[0].machine_id;
+
+//         // Dynamic grouping based on interval
+//         const timeGroup = {
+//             hour: "TO_CHAR(DATE_TRUNC('hour', timestamp), 'YYYY-MM-DD HH24:00')",
+//             day: "TO_CHAR(DATE_TRUNC('day', timestamp), 'YYYY-MM-DD')",
+//             week: "TO_CHAR(DATE_TRUNC('week', timestamp), 'YYYY-WW')",
+//             month: "TO_CHAR(DATE_TRUNC('month', timestamp), 'YYYY-MM')"
+//         }[interval];
+
+//         const query = ` 
+//             WITH per_interval_stats AS (
+//                 SELECT
+//                     ${timeGroup} AS interval,
+//                     COUNT(*) AS data_points,
+//                     SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 1 THEN 1 ELSE 0 END) AS uptime_points,
+//                     SUM(CASE WHEN (data->>'MC_STATUS')::numeric = 0 THEN 1 ELSE 0 END) AS downtime_points
+//                 FROM oee.device_data
+//                 WHERE 
+//                     deviceUid = $1
+//                     AND data::jsonb ? 'MC_STATUS'
+//                     AND timestamp BETWEEN $2 AND $3
+//                 GROUP BY ${timeGroup}
+//             ),
+
+//             availability AS (
+//                 SELECT
+//                     interval,
+//                     (SUM(uptime_points * 1.0 / NULLIF(data_points, 0)) / 
+//                     NULLIF(SUM(uptime_points * 1.0 / NULLIF(data_points, 0)) + SUM(downtime_points * 1.0 / NULLIF(data_points, 0)), 0)) * 100 AS uptime_percentage
+//                 FROM per_interval_stats
+//                 GROUP BY interval
+//             ),
+
+//             production_data AS (
+//                 SELECT 
+//                     ${timeGroup} AS interval,
+//                     (data->>'LINE_SPEED')::numeric AS line_speed,
+//                     (data->>'ACT_COLD_DIA')::numeric AS diameter,
+//                     timestamp,
+//                     LEAD(timestamp) OVER (PARTITION BY ${timeGroup} ORDER BY timestamp) AS next_timestamp
+//                 FROM oee.device_data
+//                 WHERE 
+//                     deviceUid = $1
+//                     AND data::jsonb ? 'LINE_SPEED'
+//                     AND timestamp BETWEEN $2 AND $3
+//             ),
+
+//             calculated_data AS (
+//                 SELECT 
+//                     interval,
+//                     line_speed,
+//                     diameter,
+//                     EXTRACT(EPOCH FROM (next_timestamp - timestamp)) / 60 AS time_diff_minutes
+//                 FROM production_data
+//                 WHERE next_timestamp IS NOT NULL
+//             ),
+
+//             actual_production_weight AS (
+//                 SELECT 
+//                     interval,
+//                     COALESCE(
+//                         SUM(
+//                             (3.14159 * ((diameter / 1000 / 2)^2) * 
+//                             time_diff_minutes * 
+//                             line_speed * 
+//                             7860) / 1000
+//                         ), 0
+//                     ) AS actual_weight
+//                 FROM calculated_data
+//                 GROUP BY interval
+//             ),
+
+//             target_production_weight AS (
+//                 SELECT
+//                     interval,
+//                     COALESCE(
+//                         SUM(
+//                             (3.14159 * ((diameter / 1000 / 2)^2) * 
+//                             7860) / 1000
+//                         ), 0
+//                     ) AS target_weight
+//                 FROM calculated_data
+//                 GROUP BY interval
+//             )
+
+//             SELECT
+//                 a.interval,
+//                 COALESCE(a.uptime_percentage, 0) AS Availability,
+//                 COALESCE(apw.actual_weight, 0) AS actual_weight,
+//                 COALESCE(tpw.target_weight, 0) AS target_weight,
+//                 CASE 
+//                     WHEN COALESCE(tpw.target_weight, 0) = 0 THEN 0
+//                     ELSE (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100 
+//                 END AS Performance,
+//                 100 AS Quality,
+//                 CASE 
+//                     WHEN COALESCE(a.uptime_percentage, 0) = 0 
+//                     OR COALESCE(tpw.target_weight, 0) = 0
+//                     OR COALESCE(apw.actual_weight, 0) = 0
+//                     THEN 0
+//                     ELSE (COALESCE(a.uptime_percentage, 0) * 
+//                         (COALESCE(apw.actual_weight, 0) / NULLIF(COALESCE(tpw.target_weight, 0), 0)) * 100) / 100
+//                 END AS OEE
+//             FROM availability a
+//             LEFT JOIN actual_production_weight apw ON a.interval = apw.interval
+//             LEFT JOIN target_production_weight tpw ON a.interval = tpw.interval
+//             ORDER BY a.interval;
+//         `;
+
+//         console.time("DB Query Execution");
+//         const result = await db.query(query, [machineId, start_date, end_date]);
+//         console.timeEnd("DB Query Execution");
+
+//         if (result.rows.length === 0) {
+//             return res.status(404).json(encryptData({ error: 'No data found for this device' }));
+//         }
+
+//         //return res.status(200).json(encryptData(result.rows));
+//         return res.status(200).json(result.rows);
+//     } catch (err) {
+//         console.error('Error fetching OEE data:', err);
+//         return res.status(500).json(encryptData({ error: 'Internal server error' }));
+//     }
+// }
 async function machineOEEForDeviceIntervalBased(req, res) {
     const user = req.user;
-    
+
     if (!user || !user.companyId) {
         return res.status(403).json(encryptData({ error: 'Unauthorized access. Invalid token.' }));
     }
@@ -1184,7 +1341,7 @@ async function machineOEEForDeviceIntervalBased(req, res) {
 
         const machineId = machineCheckResult.rows[0].machine_id;
 
-        // Dynamic grouping based on interval
+        // Define the time grouping based on interval
         const timeGroup = {
             hour: "TO_CHAR(DATE_TRUNC('hour', timestamp), 'YYYY-MM-DD HH24:00')",
             day: "TO_CHAR(DATE_TRUNC('day', timestamp), 'YYYY-MM-DD')",
@@ -1227,6 +1384,7 @@ async function machineOEEForDeviceIntervalBased(req, res) {
                 WHERE 
                     deviceUid = $1
                     AND data::jsonb ? 'LINE_SPEED'
+                    AND data::jsonb ? 'ACT_COLD_DIA'
                     AND timestamp BETWEEN $2 AND $3
             ),
 
@@ -1256,16 +1414,24 @@ async function machineOEEForDeviceIntervalBased(req, res) {
             ),
 
             target_production_weight AS (
+                WITH daily_max_speed AS (
+                    SELECT interval, MAX(line_speed) AS max_speed
+                    FROM calculated_data
+                    GROUP BY interval
+                )
                 SELECT
-                    interval,
+                    cd.interval,
                     COALESCE(
                         SUM(
-                            (3.14159 * ((diameter / 1000 / 2)^2) * 
+                            (3.14159 * ((cd.diameter / 1000 / 2)^2) * 
+                            cd.time_diff_minutes * 
+                            dms.max_speed * 
                             7860) / 1000
                         ), 0
                     ) AS target_weight
-                FROM calculated_data
-                GROUP BY interval
+                FROM calculated_data cd
+                JOIN daily_max_speed dms ON cd.interval = dms.interval
+                GROUP BY cd.interval
             )
 
             SELECT
@@ -1306,6 +1472,7 @@ async function machineOEEForDeviceIntervalBased(req, res) {
         return res.status(500).json(encryptData({ error: 'Internal server error' }));
     }
 }
+
 
 async function calculateProductionAndIdleTime(req, res) {
     const user = req.user;
@@ -1396,6 +1563,183 @@ async function calculateProductionAndIdleTime(req, res) {
     }
 }
 
+async function getMachineTimeFrame(req, res) {
+    const user = req.user;
+
+    if (!user || !user.companyId) {
+        return res.status(403).json(encryptData({ error: 'Unauthorized access. Invalid token.' }));
+    }
+
+    const { machine_uid } = req.params;
+    const { start_time, end_time, interval } = req.query;
+
+    const machineQuery = `
+        SELECT machine_id FROM oee.oee_machine WHERE machine_uid = $1 AND company_id = $2;
+    `;
+
+    try {
+        const machineResult = await db.query(machineQuery, [machine_uid, user.companyId]);
+
+        if (machineResult.rows.length === 0) {
+            return res.status(404).json(encryptData({ error: 'Machine not found' }));
+        }
+
+        const { machine_id } = machineResult.rows[0];
+
+        // Optimized Shift Metrics Query
+        if (interval === 'Shift') {
+            const shiftMetricsQuery = `
+                WITH valid_shifts AS (
+                    SELECT 
+                        s.shift_id,
+                        s.shift_name,
+                        s.start_time,
+                        s.end_time,
+                        sd.date AS shift_date,
+                        TO_TIMESTAMP(sd.date || ' ' || s.start_time, 'YYYY-MM-DD HH12:MI AM') AS shift_start_datetime,
+                        TO_TIMESTAMP(sd.date || ' ' || s.end_time, 'YYYY-MM-DD HH12:MI AM') AS shift_end_datetime
+                    FROM oee.oee_shifts s
+                    CROSS JOIN (
+                        SELECT generate_series(
+                            DATE($2),
+                            DATE($3),
+                            INTERVAL '1 day'
+                        )::DATE AS date
+                    ) sd
+                    WHERE POSITION(UPPER(TO_CHAR(sd.date, 'DY')) IN UPPER(s.shift_days)) > 0
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM oee.oee_holidays h
+                        WHERE h.company_id = s.company_id
+                            AND h.holiday_date = sd.date::TEXT
+                    )
+                    AND s.company_id = $4
+                ),
+                shift_data AS (
+                    SELECT
+                        vs.shift_id,
+                        vs.shift_name,
+                        vs.shift_date,
+                        vs.shift_start_datetime,
+                        vs.shift_end_datetime,
+                        dd."timestamp",
+                        LEAD(dd."timestamp") OVER (
+                            PARTITION BY vs.shift_id, vs.shift_date
+                            ORDER BY dd."timestamp"
+                        ) AS next_timestamp,
+                        dd."data"->>'MC_STATUS' AS mc_status,
+                        dd."data"->>'Act Speed' AS act_speed
+                    FROM valid_shifts vs
+                    LEFT JOIN oee.device_data dd
+                    ON dd.deviceuid = $1
+                    AND dd."timestamp" BETWEEN vs.shift_start_datetime AND vs.shift_end_datetime
+                ),
+                shift_metrics AS (
+                    SELECT
+                        shift_id,
+                        shift_name,
+                        shift_date,
+                        SUM(
+                            CASE
+                                WHEN mc_status = '0' AND next_timestamp > "timestamp" THEN
+                                    EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                                ELSE 0
+                            END
+                        ) AS downtime,
+                        SUM(
+                            CASE
+                                WHEN mc_status = '1' AND act_speed::numeric > 0 AND next_timestamp > "timestamp" THEN
+                                    EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                                ELSE 0
+                            END
+                        ) AS production_time,
+                        SUM(
+                            CASE
+                                WHEN mc_status = '1' AND act_speed::numeric = 0 AND next_timestamp > "timestamp" THEN
+                                    EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                                ELSE 0
+                            END
+                        ) AS setup_time
+                    FROM shift_data
+                    GROUP BY shift_id, shift_name, shift_date
+                )
+                SELECT
+                    shift_name,
+                    TO_CHAR(shift_date, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS interval_key,
+                    ROUND((downtime / 3600)::NUMERIC, 2) AS downtime,
+                    ROUND((production_time / 3600)::NUMERIC, 2) AS production_time,
+                    ROUND((setup_time / 3600)::NUMERIC, 2) AS setup_time
+                FROM shift_metrics
+                ORDER BY shift_name, shift_date;
+            `;
+
+            const metricsResult = await db.query(shiftMetricsQuery, [machine_id, start_time, end_time, user.companyId]);
+            return res.status(200).json(metricsResult.rows);
+        }
+
+        // Optimized Time-Based Metrics Query
+        const metricsQuery = `
+            WITH interval_data AS (
+                SELECT
+                    CASE $4
+                        WHEN 'Hour' THEN date_trunc('hour', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+                        WHEN 'Day' THEN date_trunc('day', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+                        WHEN 'Week' THEN date_trunc('week', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+                        WHEN 'Month' THEN date_trunc('month', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata')
+                    END AS interval_key,
+                    "timestamp",
+                    LEAD("timestamp") OVER (PARTITION BY date_trunc('hour', "timestamp" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Kolkata') ORDER BY "timestamp") AS next_timestamp,
+                    "data"->>'MC_STATUS' AS mc_status,
+                    "data"->>'Act Speed' AS act_speed
+                FROM oee.device_data
+                WHERE deviceuid = $1
+                AND "timestamp" BETWEEN $2 AND $3
+            ),
+            metrics AS (
+                SELECT
+                    interval_key,
+                    SUM(
+                        CASE
+                            WHEN mc_status = '0' AND next_timestamp > "timestamp" THEN
+                                EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                            ELSE 0
+                        END
+                    ) AS downtime,
+                    SUM(
+                        CASE
+                            WHEN mc_status = '1' AND act_speed::numeric > 0 AND next_timestamp > "timestamp" THEN
+                                EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                            ELSE 0
+                        END
+                    ) AS production_time,
+                    SUM(
+                        CASE
+                            WHEN mc_status = '1' AND act_speed::numeric = 0 AND next_timestamp > "timestamp" THEN
+                                EXTRACT(EPOCH FROM next_timestamp - "timestamp")
+                            ELSE 0
+                        END
+                    ) AS setup_time
+                FROM interval_data
+                GROUP BY interval_key
+            )
+            SELECT
+                interval_key,
+                ROUND((downtime / 3600)::NUMERIC, 2) AS downtime,
+                ROUND((production_time / 3600)::NUMERIC, 2) AS production_time,
+                ROUND((setup_time / 3600)::NUMERIC, 2) AS setup_time
+            FROM metrics
+            ORDER BY interval_key;
+        `;
+
+        const metricsResult = await db.query(metricsQuery, [machine_id, start_time, end_time, interval]);
+        return res.status(200).json(metricsResult.rows);
+    } catch (err) {
+        console.error('Error fetching machine metrics:', err);
+        return res.status(500).json(encryptData({ error: 'Internal server error' }));
+    }
+}
+
+
 
 module.exports = {
     getMachineName,
@@ -1406,5 +1750,6 @@ module.exports = {
     machineOEEForDevice,
     machineOEEAggregation,
     machineOEEForDeviceIntervalBased,
-    calculateProductionAndIdleTime
+    calculateProductionAndIdleTime,
+    getMachineTimeFrame
 }
